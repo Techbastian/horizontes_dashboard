@@ -4,7 +4,7 @@ function getGrupoBadgeClass(grupo) {
   const g = (grupo || '').toLowerCase();
   if (g === 'senior') return 'badge-senior';
   if (g.includes('entrevista') || g === 'pasan a entrevistas') return 'badge-entrevista';
-  if (g.includes('no') || g === 'no elegido' || g === 'no seleccionado') return 'badge-no-seleccionado';
+  if (g.includes('no') || g === 'no elegido' || g === 'no seleccionado' || g === 'no aplica') return 'badge-no-seleccionado';
   return 'badge-sin-asignar';
 }
 
@@ -18,9 +18,7 @@ function getScoreColor(score, max) {
 export default function CandidateTable({ applications, onSelectCandidate }) {
   const [search, setSearch] = useState('');
   const [filterGrupo, setFilterGrupo] = useState('');
-  const [filterCity, setFilterCity] = useState('');
-  const [filterEducation, setFilterEducation] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
+  const [filterElegibilidad, setFilterElegibilidad] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
@@ -29,24 +27,17 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
   // Extract filter options
   const filterOptions = useMemo(() => {
     const grupos = new Set();
-    const cities = new Set();
-    const educations = new Set();
-    const statuses = new Set();
+    const elegibilidades = new Set(['Elegible', 'Rechazado']);
 
     applications.forEach(app => {
       const ca = app.custom_answers || {};
       const fases = ca.seguimiento_fases || {};
       grupos.add(fases.grupo_asignado || 'Sin asignar');
-      cities.add(app.candidate?.city || 'Sin ciudad');
-      educations.add(app.candidate?.education_level || 'Sin información');
-      statuses.add(app.status || 'unknown');
     });
 
     return {
       grupos: [...grupos].sort(),
-      cities: [...cities].sort(),
-      educations: [...educations].sort(),
-      statuses: [...statuses].sort(),
+      elegibilidades: [...elegibilidades]
     };
   }, [applications]);
 
@@ -55,16 +46,19 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     return applications.map(app => {
       const ca = app.custom_answers || {};
       const fases = ca.seguimiento_fases || {};
+      const isRejected = fases.elegibilidad === 'rejected';
+
       return {
         ...app,
         fullName: `${app.candidate?.first_name || ''} ${app.candidate?.last_name || ''}`.trim(),
         grupo: fases.grupo_asignado || 'Sin asignar',
-        puntajeTecnico: typeof fases.puntaje_tecnico === 'number' ? fases.puntaje_tecnico : null,
-        puntajeEntrevista: typeof fases.puntaje_entrevista === 'number' ? fases.puntaje_entrevista : null,
-        puntajeTotal: typeof fases.puntaje_total === 'number' ? fases.puntaje_total : null,
-        city: app.candidate?.city || 'Sin ciudad',
-        education: app.candidate?.education_level || 'Sin información',
-        age: app.candidate?.age || 0,
+        // Show Elegible if pending, otherwise Rechazado
+        elegibilidadStatus: isRejected ? 'Rechazado' : 'Elegible',
+        isRejected,
+        // Hide scores if rejected from Phase 1
+        puntajeTecnico: isRejected ? null : (typeof fases.puntaje_tecnico === 'number' ? fases.puntaje_tecnico : null),
+        puntajeEntrevista: isRejected ? null : (typeof fases.puntaje_entrevista === 'number' ? fases.puntaje_entrevista : null),
+        puntajeTotal: isRejected ? null : (typeof fases.puntaje_total === 'number' ? fases.puntaje_total : null),
         email: app.candidate?.email || '',
       };
     });
@@ -83,21 +77,18 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     }
 
     if (filterGrupo) result = result.filter(a => a.grupo === filterGrupo);
-    if (filterCity) result = result.filter(a => a.city === filterCity);
-    if (filterEducation) result = result.filter(a => a.education === filterEducation);
-    if (filterStatus) result = result.filter(a => a.status === filterStatus);
+    if (filterElegibilidad) result = result.filter(a => a.elegibilidadStatus === filterElegibilidad);
 
     // Sort
     result.sort((a, b) => {
       let valA, valB;
       switch (sortField) {
         case 'name': valA = a.fullName; valB = b.fullName; break;
-        case 'age': valA = a.age; valB = b.age; break;
+        case 'elegibilidad': valA = a.elegibilidadStatus; valB = b.elegibilidadStatus; break;
         case 'puntaje': valA = a.puntajeTecnico || 0; valB = b.puntajeTecnico || 0; break;
         case 'entrevista': valA = a.puntajeEntrevista || 0; valB = b.puntajeEntrevista || 0; break;
         case 'total': valA = a.puntajeTotal || 0; valB = b.puntajeTotal || 0; break;
         case 'grupo': valA = a.grupo; valB = b.grupo; break;
-        case 'city': valA = a.city; valB = b.city; break;
         default: valA = a.fullName; valB = b.fullName;
       }
 
@@ -109,7 +100,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     });
 
     return result;
-  }, [enriched, search, filterGrupo, filterCity, filterEducation, filterStatus, sortField, sortDir]);
+  }, [enriched, search, filterGrupo, filterElegibilidad, sortField, sortDir]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -142,21 +133,13 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
             onChange={e => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
+        <select className="filter-select" value={filterElegibilidad} onChange={e => { setFilterElegibilidad(e.target.value); setPage(1); }}>
+          <option value="">Fase 1: Elegibilidad (Todos)</option>
+          {filterOptions.elegibilidades.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
         <select className="filter-select" value={filterGrupo} onChange={e => { setFilterGrupo(e.target.value); setPage(1); }}>
-          <option value="">Todos los grupos</option>
+          <option value="">Todos los grupos asignados</option>
           {filterOptions.grupos.map(g => <option key={g} value={g}>{g}</option>)}
-        </select>
-        <select className="filter-select" value={filterCity} onChange={e => { setFilterCity(e.target.value); setPage(1); }}>
-          <option value="">Todos los municipios</option>
-          {filterOptions.cities.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select className="filter-select" value={filterEducation} onChange={e => { setFilterEducation(e.target.value); setPage(1); }}>
-          <option value="">Toda la educación</option>
-          {filterOptions.educations.map(e => <option key={e} value={e}>{e}</option>)}
-        </select>
-        <select className="filter-select" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-          <option value="">Todos los estados</option>
-          {filterOptions.statuses.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
@@ -165,15 +148,11 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')}>
-                Nombre <SortIcon field="name" />
+              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')} style={{ width: '25%' }}>
+                Candidato <SortIcon field="name" />
               </th>
-              <th className={sortField === 'age' ? 'sorted' : ''} onClick={() => handleSort('age')}>
-                Edad <SortIcon field="age" />
-              </th>
-              <th>Educación</th>
-              <th className={sortField === 'city' ? 'sorted' : ''} onClick={() => handleSort('city')}>
-                Municipio <SortIcon field="city" />
+              <th className={sortField === 'elegibilidad' ? 'sorted' : ''} onClick={() => handleSort('elegibilidad')}>
+                Fase 1: Elegibilidad <SortIcon field="elegibilidad" />
               </th>
               <th className={sortField === 'puntaje' ? 'sorted' : ''} onClick={() => handleSort('puntaje')}>
                 P. Técnico <SortIcon field="puntaje" />
@@ -184,24 +163,27 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
               <th className={sortField === 'total' ? 'sorted' : ''} onClick={() => handleSort('total')}>
                 P. Total <SortIcon field="total" />
               </th>
-              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')}>
-                Grupo <SortIcon field="grupo" />
+              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ textAlign: 'right' }}>
+                Grupo Asignado <SortIcon field="grupo" />
               </th>
-              <th>Estado</th>
             </tr>
           </thead>
           <tbody>
             {pageData.map(app => (
-              <tr key={app.id} onClick={() => onSelectCandidate(app)}>
+              <tr key={app.id} onClick={() => onSelectCandidate(app)} className={app.isRejected ? 'rejected-row' : ''}>
                 <td>
                   <div className="table-name">{app.fullName}</div>
                   <div className="table-sub">{app.email}</div>
                 </td>
-                <td>{app.age > 0 ? app.age : '—'}</td>
-                <td>{app.education}</td>
-                <td>{app.city}</td>
                 <td>
-                  {app.puntajeTecnico !== null ? (
+                  <span className={`badge ${app.isRejected ? 'badge-rechazado' : 'badge-pendiente'}`} style={{ backgroundColor: app.isRejected ? '#f43f5e20' : '#10b98120', color: app.isRejected ? '#f43f5e' : '#10b981' }}>
+                    {app.elegibilidadStatus}
+                  </span>
+                </td>
+                <td>
+                  {app.isRejected ? (
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
+                  ) : app.puntajeTecnico !== null ? (
                     <div className="score-bar-container">
                       <div className="score-bar">
                         <div
@@ -219,7 +201,9 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                   )}
                 </td>
                 <td>
-                  {app.puntajeEntrevista !== null ? (
+                  {app.isRejected ? (
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
+                  ) : app.puntajeEntrevista !== null ? (
                     <div className="score-bar-container">
                       <div className="score-bar">
                         <div
@@ -237,21 +221,20 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                   )}
                 </td>
                 <td>
-                  {app.puntajeTotal !== null ? (
+                  {app.isRejected ? (
+                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
+                  ) : app.puntajeTotal !== null ? (
                     <span className="score-value">{app.puntajeTotal}</span>
                   ) : (
                     <span style={{ color: 'var(--text-muted)' }}>—</span>
                   )}
                 </td>
-                <td>
-                  <span className={`badge ${getGrupoBadgeClass(app.grupo)}`}>
-                    {app.grupo}
-                  </span>
-                </td>
-                <td>
-                  <span className={`badge badge-${app.status}`}>
-                    {app.status === 'pending' ? 'Pendiente' : app.status === 'rejected' ? 'Rechazado' : app.status}
-                  </span>
+                <td style={{ textAlign: 'right' }}>
+                  {!app.isRejected && (
+                    <span className={`badge ${getGrupoBadgeClass(app.grupo)}`}>
+                      {app.grupo}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
