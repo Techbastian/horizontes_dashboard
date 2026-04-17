@@ -1,18 +1,19 @@
 import { useState, useMemo } from 'react';
 
-function getGrupoBadgeClass(grupo) {
-  const g = (grupo || '').toLowerCase();
-  if (g === 'senior') return 'badge-senior';
-  if (g.includes('entrevista') || g === 'pasan a entrevistas') return 'badge-entrevista';
-  if (g.includes('no') || g === 'no elegido' || g === 'no seleccionado' || g === 'no aplica') return 'badge-no-seleccionado';
-  return 'badge-sin-asignar';
-}
-
 function getScoreColor(score, max) {
   const pct = score / max;
   if (pct >= 0.7) return '#10b981';
   if (pct >= 0.4) return '#f59e0b';
   return '#f43f5e';
+}
+
+function getGrupoBadgeClass(grupo) {
+  const g = (grupo || '').toLowerCase();
+  if (g === 'senior') return 'badge-senior';
+  if (g.includes('entrevista') || g === 'pasan a entrevistas') return 'badge-entrevista';
+  if (g.includes('respaldo')) return 'badge-entrevista'; // yellow-ish
+  if (g.includes('no') || g === 'no elegido' || g === 'no seleccionado' || g === 'no aplica') return 'badge-no-seleccionado';
+  return 'badge-sin-asignar';
 }
 
 export default function CandidateTable({ applications, onSelectCandidate }) {
@@ -27,8 +28,6 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
   // Extract filter options
   const filterOptions = useMemo(() => {
     const grupos = new Set();
-    const elegibilidades = new Set(['Elegible', 'Rechazado']);
-
     applications.forEach(app => {
       const ca = app.custom_answers || {};
       const fases = ca.seguimiento_fases || {};
@@ -37,7 +36,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
 
     return {
       grupos: [...grupos].sort(),
-      elegibilidades: [...elegibilidades]
+      elegibilidades: ['Elegible', 'No elegible']
     };
   }, [applications]);
 
@@ -48,16 +47,23 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
       const fases = ca.seguimiento_fases || {};
       const isRejected = fases.elegibilidad === 'rejected';
 
+      // Parse puntajes taking 'N/A' into account
+      const pFase2 = (typeof fases.puntaje_tecnico === 'number') ? fases.puntaje_tecnico : null;
+      let pFase3 = null;
+      if (typeof fases.puntaje_entrevista === 'number') {
+        pFase3 = fases.puntaje_entrevista;
+      } else if (fases.puntaje_entrevista === '0' || fases.puntaje_entrevista === 0) {
+        pFase3 = 0;
+      }
+
       return {
         ...app,
         fullName: `${app.candidate?.first_name || ''} ${app.candidate?.last_name || ''}`.trim(),
         grupo: fases.grupo_asignado || 'Sin asignar',
-        // Show Elegible if pending, otherwise Rechazado
-        elegibilidadStatus: isRejected ? 'Rechazado' : 'Elegible',
+        elegibilidadStatus: isRejected ? 'No elegible' : 'Elegible',
         isRejected,
-        // Hide scores if rejected from Phase 1
-        puntajeTecnico: isRejected ? null : (typeof fases.puntaje_tecnico === 'number' ? fases.puntaje_tecnico : null),
-        puntajeEntrevista: isRejected ? null : (typeof fases.puntaje_entrevista === 'number' ? fases.puntaje_entrevista : null),
+        puntajeTecnico: isRejected ? null : pFase2,
+        puntajeActitudinal: isRejected ? null : pFase3,
         puntajeTotal: isRejected ? null : (typeof fases.puntaje_total === 'number' ? fases.puntaje_total : null),
         email: app.candidate?.email || '',
       };
@@ -85,8 +91,8 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
       switch (sortField) {
         case 'name': valA = a.fullName; valB = b.fullName; break;
         case 'elegibilidad': valA = a.elegibilidadStatus; valB = b.elegibilidadStatus; break;
-        case 'puntaje': valA = a.puntajeTecnico || 0; valB = b.puntajeTecnico || 0; break;
-        case 'entrevista': valA = a.puntajeEntrevista || 0; valB = b.puntajeEntrevista || 0; break;
+        case 'tecnico': valA = a.puntajeTecnico || 0; valB = b.puntajeTecnico || 0; break;
+        case 'actitudinal': valA = a.puntajeActitudinal || -1; valB = b.puntajeActitudinal || -1; break;
         case 'total': valA = a.puntajeTotal || 0; valB = b.puntajeTotal || 0; break;
         case 'grupo': valA = a.grupo; valB = b.grupo; break;
         default: valA = a.fullName; valB = b.fullName;
@@ -120,6 +126,61 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     return <span className="sort-icon">{sortDir === 'asc' ? '↑' : '↓'}</span>;
   };
 
+  // Render Phase 3 (Formulario Actitudinal)
+  const renderFaseActitudinal = (app) => {
+    if (app.isRejected) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+    
+    if (app.puntajeActitudinal === null) {
+      return <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No avanzó</span>;
+    }
+    if (app.puntajeActitudinal === 0) {
+      return <span style={{ color: '#f43f5e', fontSize: '13px', fontWeight: '500' }}>No diligenció</span>;
+    }
+
+    return (
+      <div className="score-bar-container">
+        <div className="score-bar">
+          <div
+            className="score-bar-fill"
+            style={{
+              width: `${(app.puntajeActitudinal / 17) * 100}%`,
+              background: getScoreColor(app.puntajeActitudinal, 17),
+            }}
+          />
+        </div>
+        <span className="score-value">{app.puntajeActitudinal}</span>
+      </div>
+    );
+  };
+
+  // Render Phase 4 (Assignment Rules)
+  const renderAssignment = (app) => {
+    if (app.isRejected) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+
+    const g = app.grupo || '';
+    let label = g;
+    let sub = '';
+
+    if (g === 'Senior') {
+      label = 'Senior';
+      sub = 'Avanza por puntaje técnico';
+    } else if (g === 'Grupo de respaldo') {
+      label = 'Grupo de respaldo';
+    } else if (g === 'Pasan a entrevistas') {
+      label = 'Pasan a entrevistas';
+      sub = app.puntajeActitudinal > 0 ? `Puntaje: ${app.puntajeActitudinal}` : '';
+    }
+
+    return (
+      <div style={{ textAlign: 'right' }}>
+        <span className={`badge ${getGrupoBadgeClass(g)}`}>
+          {label}
+        </span>
+        {sub && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{sub}</div>}
+      </div>
+    );
+  };
+
   return (
     <div>
       {/* Filters */}
@@ -138,7 +199,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
           {filterOptions.elegibilidades.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
         <select className="filter-select" value={filterGrupo} onChange={e => { setFilterGrupo(e.target.value); setPage(1); }}>
-          <option value="">Todos los grupos asignados</option>
+          <option value="">Fase 4: Asignación Final (Todos)</option>
           {filterOptions.grupos.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
       </div>
@@ -148,23 +209,20 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')} style={{ width: '25%' }}>
+              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')} style={{ width: '22%' }}>
                 Candidato <SortIcon field="name" />
               </th>
               <th className={sortField === 'elegibilidad' ? 'sorted' : ''} onClick={() => handleSort('elegibilidad')}>
                 Fase 1: Elegibilidad <SortIcon field="elegibilidad" />
               </th>
-              <th className={sortField === 'puntaje' ? 'sorted' : ''} onClick={() => handleSort('puntaje')}>
-                P. Técnico <SortIcon field="puntaje" />
+              <th className={sortField === 'tecnico' ? 'sorted' : ''} onClick={() => handleSort('tecnico')} style={{ width: '13%' }}>
+                Fase 2: Prueba Técnica <SortIcon field="tecnico" />
               </th>
-              <th className={sortField === 'entrevista' ? 'sorted' : ''} onClick={() => handleSort('entrevista')}>
-                P. Entrevista <SortIcon field="entrevista" />
+              <th className={sortField === 'actitudinal' ? 'sorted' : ''} onClick={() => handleSort('actitudinal')} style={{ width: '18%' }}>
+                Fase 3: Formulario Actitudinal <SortIcon field="actitudinal" />
               </th>
-              <th className={sortField === 'total' ? 'sorted' : ''} onClick={() => handleSort('total')}>
-                P. Total <SortIcon field="total" />
-              </th>
-              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ textAlign: 'right' }}>
-                Grupo Asignado <SortIcon field="grupo" />
+              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ textAlign: 'right', width: '20%' }}>
+                Fase 4: Asignación Final <SortIcon field="grupo" />
               </th>
             </tr>
           </thead>
@@ -182,7 +240,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                 </td>
                 <td>
                   {app.isRejected ? (
-                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
+                    <span style={{ color: 'var(--text-muted)' }}>—</span>
                   ) : app.puntajeTecnico !== null ? (
                     <div className="score-bar-container">
                       <div className="score-bar">
@@ -201,40 +259,10 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                   )}
                 </td>
                 <td>
-                  {app.isRejected ? (
-                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
-                  ) : app.puntajeEntrevista !== null ? (
-                    <div className="score-bar-container">
-                      <div className="score-bar">
-                        <div
-                          className="score-bar-fill"
-                          style={{
-                            width: `${(app.puntajeEntrevista / 17) * 100}%`,
-                            background: getScoreColor(app.puntajeEntrevista, 17),
-                          }}
-                        />
-                      </div>
-                      <span className="score-value">{app.puntajeEntrevista}</span>
-                    </div>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)' }}>N/A</span>
-                  )}
+                  {renderFaseActitudinal(app)}
                 </td>
                 <td>
-                  {app.isRejected ? (
-                    <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>
-                  ) : app.puntajeTotal !== null ? (
-                    <span className="score-value">{app.puntajeTotal}</span>
-                  ) : (
-                    <span style={{ color: 'var(--text-muted)' }}>—</span>
-                  )}
-                </td>
-                <td style={{ textAlign: 'right' }}>
-                  {!app.isRejected && (
-                    <span className={`badge ${getGrupoBadgeClass(app.grupo)}`}>
-                      {app.grupo}
-                    </span>
-                  )}
+                  {renderAssignment(app)}
                 </td>
               </tr>
             ))}
@@ -251,11 +279,14 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
           <button className="pagination-btn" onClick={() => setPage(p => p - 1)} disabled={page <= 1}>
             ← Anterior
           </button>
-          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-            const p = i + 1;
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            let p = page <= 3 ? i + 1 : page - 2 + i;
+            if (p > totalPages) p = totalPages - 4 + i;
+            if (p < 1) p = 1;
+            
             return (
               <button
-                key={p}
+                key={i}
                 className={`pagination-btn${p === page ? ' active' : ''}`}
                 onClick={() => setPage(p)}
               >
@@ -263,7 +294,6 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
               </button>
             );
           })}
-          {totalPages > 7 && <span style={{ color: 'var(--text-muted)', padding: '0 4px' }}>...</span>}
           <button className="pagination-btn" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>
             Siguiente →
           </button>
