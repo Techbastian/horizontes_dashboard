@@ -80,7 +80,7 @@ export function useApplicationsData() {
           id,
           status,
           custom_form_data,
-          created_at,
+          enrolled_at,
           candidate:candidates(
             id, first_name, last_name, email, city, document_type, document_number, phone, gender, age
           )
