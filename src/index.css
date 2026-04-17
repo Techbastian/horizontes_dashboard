@@ -659,59 +659,79 @@ body {
 .funnel-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 6px;
+  padding: 16px 0;
+  width: 100%;
 }
 
 .funnel-step {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
 }
 
-.funnel-step-info {
-  width: 120px;
-  flex-shrink: 0;
+.funnel-step:hover {
+  transform: scale(1.01);
 }
 
-.funnel-step-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+.funnel-step:hover .funnel-bar-fill {
+  filter: brightness(1.1);
 }
 
-.funnel-step-count {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.funnel-bar-track {
-  flex: 1;
-  height: 36px;
-  background: rgba(148, 163, 184, 0.04);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
+.funnel-bar-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  position: relative;
 }
 
 .funnel-bar-fill {
-  height: 100%;
-  border-radius: var(--radius-sm);
+  height: 48px; /* Taller bars */
+  border-radius: 4px; /* Slightly squarish for better triangle stacking */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  padding-left: 12px;
-  font-size: 13px;
-  font-weight: 700;
+  justify-content: center;
   color: white;
   transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: visible;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.funnel-step-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 16px;
+}
+
+.funnel-step-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.funnel-step-name {
+  font-size: 14px;
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.funnel-step-count {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.9;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .funnel-rate {
-  width: 50px;
-  text-align: right;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
 /* ===== TABLE ===== */
