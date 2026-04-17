@@ -155,7 +155,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
 
   // Render Phase 4 (Assignment Rules)
   const renderAssignment = (app) => {
-    if (app.isRejected) return <span style={{ color: 'var(--text-muted)' }}>—</span>;
+    if (app.isRejected) return <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>;
 
     const g = app.grupo || '';
     let label = g;
@@ -172,7 +172,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     }
 
     return (
-      <div style={{ textAlign: 'right' }}>
+      <div style={{ textAlign: 'center' }}>
         <span className={`badge ${getGrupoBadgeClass(g)}`}>
           {label}
         </span>
@@ -221,7 +221,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
               <th className={sortField === 'actitudinal' ? 'sorted' : ''} onClick={() => handleSort('actitudinal')} style={{ width: '18%' }}>
                 Fase 3: Formulario Actitudinal <SortIcon field="actitudinal" />
               </th>
-              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ textAlign: 'right', width: '20%' }}>
+              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ width: '20%' }}>
                 Fase 4: Asignación Final <SortIcon field="grupo" />
               </th>
             </tr>
