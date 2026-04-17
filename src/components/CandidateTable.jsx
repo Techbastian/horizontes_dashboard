@@ -162,8 +162,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     let sub = '';
 
     if (g === 'Senior') {
-      label = 'Senior';
-      sub = 'Avanza por puntaje técnico';
+      label = 'Avanza por puntaje técnico';
     } else if (g === 'Grupo de respaldo') {
       label = 'Grupo de respaldo';
     } else if (g === 'Pasan a entrevistas') {
@@ -176,7 +175,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         <span className={`badge ${getGrupoBadgeClass(g)}`}>
           {label}
         </span>
-        {sub && <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{sub}</div>}
+        {sub && <div style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '4px auto 0' }}>{sub}</div>}
       </div>
     );
   };
