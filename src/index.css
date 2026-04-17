@@ -659,77 +659,74 @@ body {
 .funnel-container {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  width: 100%;
+  height: 100%;
+}
+
+.funnel-step-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   padding: 16px 0;
-  width: 100%;
-}
-
-.funnel-step {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  border-bottom: 1px dashed var(--border-light);
   cursor: pointer;
-  transition: transform var(--transition-fast);
+  transition: background var(--transition-fast);
+  flex: 1; /* Divides the area equitably */
 }
 
-.funnel-step:hover {
-  transform: scale(1.01);
+.funnel-step-row:last-child {
+  border-bottom: none;
 }
 
-.funnel-step:hover .funnel-bar-fill {
+.funnel-step-row:hover {
+  background: rgba(148, 163, 184, 0.03);
+}
+
+.funnel-step-row:hover .funnel-bar-fill {
   filter: brightness(1.1);
+  transform: scale(1.02);
 }
 
-.funnel-bar-wrapper {
-  width: 100%;
+.funnel-step-titles {
   display: flex;
-  justify-content: center;
-  position: relative;
-}
-
-.funnel-bar-fill {
-  height: 48px; /* Taller bars */
-  border-radius: 4px; /* Slightly squarish for better triangle stacking */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: visible;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.funnel-step-content {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 0 16px;
-}
-
-.funnel-step-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-bottom: 8px;
+  align-items: baseline;
 }
 
 .funnel-step-name {
   font-size: 14px;
   font-weight: 700;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  color: var(--text-primary);
 }
 
 .funnel-step-count {
   font-size: 12px;
-  font-weight: 500;
-  opacity: 0.9;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  color: var(--text-muted);
+}
+
+.funnel-bar-center-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.funnel-bar-fill {
+  height: 36px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .funnel-rate {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   text-shadow: 0 1px 3px rgba(0,0,0,0.4);
 }

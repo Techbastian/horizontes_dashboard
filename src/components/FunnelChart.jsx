@@ -36,27 +36,26 @@ export default function FunnelChart({ data }) {
 
         return (
           <div 
-            className="funnel-step" 
+            className="funnel-step-row" 
             key={step.name} 
             onClick={() => handleStepClick(step.name)}
             title={`Ver detalles de ${step.name}`}
           >
-            <div className="funnel-bar-wrapper">
+            <div className="funnel-step-titles">
+              <span className="funnel-step-name">{step.name}</span>
+              <span className="funnel-step-count">{step.value} personas</span>
+            </div>
+            
+            <div className="funnel-bar-center-container">
               <div
                 className="funnel-bar-fill"
                 style={{
-                  width: `${Math.max(pct, 15)}%`, // Ensure it never gets perfectly 0 for visibility
+                  width: `${Math.max(pct, 12)}%`, // Ensure visibility even for extreme small % 
                   background: step.color,
                   zIndex: data.length - i, 
                 }}
               >
-                <div className="funnel-step-content">
-                  <div className="funnel-step-left">
-                    <span className="funnel-step-name">{step.name}</span>
-                    <span className="funnel-step-count">({step.value})</span>
-                  </div>
-                  <span className="funnel-rate">{rate}%</span>
-                </div>
+                <span className="funnel-rate">{rate}%</span>
               </div>
             </div>
           </div>
