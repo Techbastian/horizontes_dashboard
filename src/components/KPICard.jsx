@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export default function KPICard({ label, value, icon, change, changeLabel, index = 0 }) {
+export default function KPICard({ label, value, icon, change, changeLabel, index = 0, onClick }) {
   const valueRef = useRef(null);
 
   useEffect(() => {
@@ -13,7 +13,11 @@ export default function KPICard({ label, value, icon, change, changeLabel, index
   }, [value, index]);
 
   return (
-    <div className="kpi-card">
+    <div 
+      className={`kpi-card ${onClick ? 'clickable' : ''}`} 
+      onClick={onClick}
+      style={{ cursor: onClick ? 'pointer' : 'default' }}
+    >
       <div className="kpi-label">
         <span className="kpi-label-icon">{icon}</span>
         {label}

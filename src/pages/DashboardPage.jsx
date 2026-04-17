@@ -5,20 +5,6 @@ import DonutChartWidget from '../components/DonutChart';
 import HorizontalBarChart from '../components/HorizontalBarChart';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const GRUPO_COLORS = {
-  'No elegido': '#f43f5e',
-  'No seleccionado': '#f43f5e',
-  'Pasan a entrevistas': '#7c3aed',
-  'Senior': '#0d9488',
-  'Grupo de respaldo': '#f59e0b',
-  'Reemplazo': '#f59e0b',
-  'Sin asignar': '#64748b',
-};
-
-function getGrupoColor(grupo) {
-  return GRUPO_COLORS[grupo] || '#64748b';
-}
-
 function CustomTooltip({ active, payload, label }) {
   if (active && payload && payload.length) {
     return (
@@ -61,27 +47,12 @@ export default function DashboardPage({ metrics, applications }) {
     .sort((a, b) => (b.puntajeTotal || 0) - (a.puntajeTotal || 0))
     .slice(0, 6);
 
-  // Compute grupo distribution — filter out groups with 0 or near-0
-  const grupoData = {};
-  metrics.withFases.forEach(a => {
-    const g = a.grupoAsignado;
-    grupoData[g] = (grupoData[g] || 0) + 1;
-  });
-  
-  const total = metrics.total;
-  
-  // Sort by value desc and take top 3 for the donut summary
-  const topGrupos = Object.entries(grupoData)
-    .filter(([_, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3);
-
   return (
     <div className="animate-in">
       {/* Header */}
       <div className="page-header">
         <div className="page-header-left">
-          <h1>Executive Overview</h1>
+          <h1>Resumen Ejecutivo</h1>
           <p>Métricas en tiempo real e insights operacionales para Horizontes Senior.</p>
         </div>
         <div className="page-header-actions">
@@ -90,121 +61,65 @@ export default function DashboardPage({ metrics, applications }) {
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="kpi-grid">
+      {/* KPI Cards (6 cards) */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
         <KPICard
           label="Total Postulados"
           value={metrics.total.toLocaleString()}
           icon="📋"
           change={12.5}
-          changeLabel="vs semana pasada"
+          changeLabel="vs sem. pasada"
           index={0}
+          onClick={() => navigate('/candidatos')}
         />
         <KPICard
           label="Elegibles"
           value={metrics.elegibles.toLocaleString()}
           icon="✅"
           change={parseFloat(metrics.tasaElegibilidad)}
-          changeLabel={`${metrics.tasaElegibilidad}% del total`}
+          changeLabel={`% del total`}
           index={1}
+          onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'Elegible' } })}
         />
         <KPICard
           label="Evaluados"
           value={metrics.evaluados.toLocaleString()}
           icon="📝"
           change={metrics.total > 0 ? parseFloat(((metrics.evaluados / metrics.total) * 100).toFixed(1)) : 0}
-          changeLabel="evaluación técnica"
+          changeLabel="% del total"
           index={2}
+          onClick={() => navigate('/candidatos', { state: { requireFase2: true } })}
         />
         <KPICard
-          label="Entrevistados"
+          label="Form. Actitudinal"
           value={metrics.entrevistados.toLocaleString()}
           icon="🎤"
           change={metrics.evaluados > 0 ? parseFloat(((metrics.entrevistados / metrics.evaluados) * 100).toFixed(1)) : 0}
-          changeLabel="de evaluados"
+          changeLabel="% de evaluados"
           index={3}
+          onClick={() => navigate('/candidatos', { state: { requireFase3: true } })}
+        />
+        <KPICard
+          label="No Elegibles"
+          value={metrics.noElegibles.toLocaleString()}
+          icon="⛔"
+          change={metrics.total > 0 ? parseFloat(((metrics.noElegibles / metrics.total) * 100).toFixed(1)) : 0}
+          changeLabel="% del total"
+          index={4}
+          onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'No elegible' } })}
         />
         <KPICard
           label="Prom. Técnico"
           value={metrics.avgPuntajeTecnico}
           icon="⭐"
           change={0}
-          changeLabel="de 15 puntos max"
-          index={4}
+          changeLabel="de 15 puntos"
+          index={5}
+          onClick={() => navigate('/candidatos')}
         />
       </div>
 
-      {/* Middle Row: Donut charts + Top Candidates */}
-      <div className="dashboard-grid">
-        {/* Donut Charts — "Order Summary" style */}
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Distribución por Grupo</div>
-              <div className="card-subtitle">Clasificación actual de candidatos en el pipeline</div>
-            </div>
-            <button className="btn btn-sm btn-secondary" style={{ border: 'none', fontSize: '18px', padding: '4px 8px' }}>⋯</button>
-          </div>
-          <div className="donut-grid">
-            {topGrupos.map(([name, value]) => {
-              const pct = ((value / total) * 100).toFixed(0);
-              return (
-                <DonutChartWidget
-                  key={name}
-                  data={{ [name]: value }}
-                  total={total}
-                  color={getGrupoColor(name)}
-                  centerValue={`${pct}%`}
-                  centerLabel={name}
-                  size={150}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Top Candidates */}
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Top Candidatos</div>
-              <div className="card-subtitle">Mayor puntaje total</div>
-            </div>
-          </div>
-          {topCandidates.length > 0 ? (
-            <>
-              {topCandidates.map((app, i) => {
-                const colors = ['#7c3aed', '#0d9488', '#3b82f6', '#f97316', '#f43f5e', '#06b6d4'];
-                return (
-                  <div className="list-item" key={app.id}>
-                    <div className="list-item-avatar" style={{ background: colors[i % colors.length] }}>
-                      {(app.candidate?.first_name?.[0] || '?')}{(app.candidate?.last_name?.[0] || '')}
-                    </div>
-                    <div className="list-item-info">
-                      <div className="list-item-name">{app.candidate?.first_name} {app.candidate?.last_name}</div>
-                      <div className="list-item-sub">{app.candidate?.city} · {app.candidate?.education_level}</div>
-                    </div>
-                    <div className="list-item-right">
-                      <div className="list-item-value">{app.puntajeTotal}/32</div>
-                      <div className="list-item-meta">P. Total</div>
-                    </div>
-                  </div>
-                );
-              })}
-              <button className="view-all-btn" onClick={() => navigate('/candidatos')}>
-                Ver Todos los Candidatos
-              </button>
-            </>
-          ) : (
-            <div className="empty-state">
-              <div className="empty-state-icon">📊</div>
-              <div className="empty-state-text">Aún no hay puntajes asignados</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Bottom Row: Funnel + City distribution */}
+      {/* Middle Row: Funnel (replaces Donut) + Top Candidates */}
       <div className="dashboard-grid">
         {/* Funnel + Trend chart */}
         <div className="card">
@@ -215,11 +130,11 @@ export default function DashboardPage({ metrics, applications }) {
             </div>
           </div>
           <FunnelChart data={metrics.funnelData} />
-
+          
           {trendData.length > 2 && (
             <div style={{ marginTop: 28 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                <div className="card-title" style={{ fontSize: '14px' }}>Tendencia de Actividad</div>
+                <div className="card-title" style={{ fontSize: '14px' }}>Tendencia de Postulaciones</div>
               </div>
               <ResponsiveContainer width="100%" height={170}>
                 <AreaChart data={trendData}>
@@ -240,6 +155,51 @@ export default function DashboardPage({ metrics, applications }) {
           )}
         </div>
 
+        {/* Top Candidates */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">Top Candidatos</div>
+              <div className="card-subtitle">Mayor puntaje total acumulado</div>
+            </div>
+          </div>
+          <div style={{ flex: 1 }}>
+            {topCandidates.length > 0 ? (
+              <>
+                {topCandidates.map((app, i) => {
+                  const colors = ['#7c3aed', '#0d9488', '#3b82f6', '#f97316', '#f43f5e', '#06b6d4'];
+                  return (
+                    <div className="list-item" key={app.id}>
+                      <div className="list-item-avatar" style={{ background: colors[i % colors.length] }}>
+                        {(app.candidate?.first_name?.[0] || '?')}{(app.candidate?.last_name?.[0] || '')}
+                      </div>
+                      <div className="list-item-info">
+                        <div className="list-item-name">{app.candidate?.first_name} {app.candidate?.last_name}</div>
+                        <div className="list-item-sub">Doc: {app.candidate?.document_number || 'S/N'}</div>
+                      </div>
+                      <div className="list-item-right">
+                        <div className="list-item-value">{app.puntajeTotal}/32</div>
+                        <div className="list-item-meta">P. Total</div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button className="view-all-btn" onClick={() => navigate('/candidatos')} style={{ marginTop: '16px' }}>
+                  Ver listado completo →
+                </button>
+              </>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-state-icon">📊</div>
+                <div className="empty-state-text">Aún no hay puntajes asignados</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Row: Demographics and Geography */}
+      <div className="dashboard-grid-full">
         {/* City Distribution */}
         <div className="card">
           <HorizontalBarChart
@@ -249,10 +209,7 @@ export default function DashboardPage({ metrics, applications }) {
             maxItems={8}
           />
         </div>
-      </div>
 
-      {/* Demographics row */}
-      <div className="dashboard-grid-full">
         <div className="card">
           <div className="card-header">
             <div>
@@ -286,15 +243,6 @@ export default function DashboardPage({ metrics, applications }) {
                 })}
             </div>
           </div>
-        </div>
-
-        <div className="card">
-          <HorizontalBarChart
-            data={metrics.educationDistribution}
-            title="Nivel Educativo"
-            subtitle="Distribución por nivel de formación"
-            maxItems={10}
-          />
         </div>
       </div>
     </div>

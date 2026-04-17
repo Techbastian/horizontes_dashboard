@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 function getScoreColor(score, max) {
   const pct = score / max;
@@ -17,13 +18,38 @@ function getGrupoBadgeClass(grupo) {
 }
 
 export default function CandidateTable({ applications, onSelectCandidate }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [search, setSearch] = useState('');
   const [filterGrupo, setFilterGrupo] = useState('');
   const [filterElegibilidad, setFilterElegibilidad] = useState('');
+  const [filterFase2, setFilterFase2] = useState(false);
+  const [filterFase3, setFilterFase3] = useState(false);
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
   const pageSize = 20;
+
+  // Sync state from dashboard navigation
+  useEffect(() => {
+    if (location.state) {
+      if (location.state.filterElegibilidad !== undefined) setFilterElegibilidad(location.state.filterElegibilidad);
+      if (location.state.requireFase2 !== undefined) setFilterFase2(location.state.requireFase2);
+      if (location.state.requireFase3 !== undefined) setFilterFase3(location.state.requireFase3);
+      setPage(1);
+    }
+  }, [location.state]);
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setFilterGrupo('');
+    setFilterElegibilidad('');
+    setFilterFase2(false);
+    setFilterFase3(false);
+    setPage(1);
+    navigate(location.pathname, { replace: true, state: {} }); // Clear router state
+  };
 
   // Extract filter options
   const filterOptions = useMemo(() => {
@@ -59,6 +85,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
       return {
         ...app,
         fullName: `${app.candidate?.first_name || ''} ${app.candidate?.last_name || ''}`.trim(),
+        documentNumber: app.candidate?.document_number || '',
         grupo: fases.grupo_asignado || 'Sin asignar',
         elegibilidadStatus: isRejected ? 'No elegible' : 'Elegible',
         isRejected,
@@ -78,12 +105,15 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
       const s = search.toLowerCase();
       result = result.filter(a =>
         a.fullName.toLowerCase().includes(s) ||
-        a.email.toLowerCase().includes(s)
+        a.email.toLowerCase().includes(s) ||
+        a.documentNumber.includes(s)
       );
     }
 
     if (filterGrupo) result = result.filter(a => a.grupo === filterGrupo);
     if (filterElegibilidad) result = result.filter(a => a.elegibilidadStatus === filterElegibilidad);
+    if (filterFase2) result = result.filter(a => a.puntajeTecnico !== null && a.puntajeTecnico > 0);
+    if (filterFase3) result = result.filter(a => a.puntajeActitudinal !== null && a.puntajeActitudinal > 0);
 
     // Sort
     result.sort((a, b) => {
@@ -106,7 +136,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     });
 
     return result;
-  }, [enriched, search, filterGrupo, filterElegibilidad, sortField, sortDir]);
+  }, [enriched, search, filterGrupo, filterElegibilidad, filterFase2, filterFase3, sortField, sortDir]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -183,12 +213,12 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
   return (
     <div>
       {/* Filters */}
-      <div className="filters-bar">
-        <div className="filter-search">
+      <div className="filters-bar" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="filter-search" style={{ flex: '1', minWidth: '250px' }}>
           <span className="filter-search-icon">🔍</span>
           <input
             type="text"
-            placeholder="Buscar por nombre o email..."
+            placeholder="Buscar por nombre, email o cédula..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
           />
@@ -201,6 +231,22 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
           <option value="">Fase 4: Asignación Final (Todos)</option>
           {filterOptions.grupos.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
+        
+        {/* Ad hoc filter indicators */}
+        {(filterFase2 || filterFase3) && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--accent-teal)' }}>
+            {filterFase2 && <span>✅ Evaluados</span>}
+            {filterFase3 && <span>✅ Formulario Actitudinal</span>}
+          </div>
+        )}
+
+        <button 
+          className="btn btn-secondary btn-sm" 
+          onClick={handleClearFilters}
+          style={{ width: 'auto', padding: '8px 16px', marginLeft: 'auto' }}
+        >
+          Limpiar Filtros
+        </button>
       </div>
 
       {/* Table */}
