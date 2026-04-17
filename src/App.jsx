@@ -3,6 +3,7 @@ import { useApplicationsData } from './hooks/useApplicationsData';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import CandidatesPage from './pages/CandidatesPage';
+import FormationPage from './pages/FormationPage';
 
 function LoadingScreen() {
   return (
@@ -27,7 +28,7 @@ function ErrorScreen({ message, onRetry }) {
 }
 
 export default function App() {
-  const { applications, project, cohort, metrics, loading, error, updateApplication, refetch } = useApplicationsData();
+  const { applications, enrollments, project, cohort, metrics, loading, error, updateApplication, refetch } = useApplicationsData();
 
   if (loading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
@@ -53,6 +54,14 @@ export default function App() {
               <CandidatesPage
                 applications={applications}
                 updateApplication={updateApplication}
+              />
+            }
+          />
+          <Route
+            path="/formacion"
+            element={
+              <FormationPage
+                enrollments={enrollments}
               />
             }
           />

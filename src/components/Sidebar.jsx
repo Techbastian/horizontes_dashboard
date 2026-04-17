@@ -46,11 +46,14 @@ export default function Sidebar({ isOpen, onClose }) {
             Candidatos
           </NavLink>
 
-          <div className="nav-item disabled">
+          <NavLink
+            to="/formacion"
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
+          >
             <span className="nav-item-icon">🎓</span>
-            Cohorte
-            <span className="nav-badge">Próximamente</span>
-          </div>
+            Formación
+          </NavLink>
 
           <div className="nav-item disabled">
             <span className="nav-item-icon">⚙️</span>

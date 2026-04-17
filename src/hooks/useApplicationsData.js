@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 
 export function useApplicationsData() {
   const [applications, setApplications] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
   const [project, setProject] = useState(null);
   const [cohort, setCohort] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +73,26 @@ export function useApplicationsData() {
           hasMore = false;
         }
       }
+      // 4. Get enrollments
+      const { data: enrs, error: enrErr } = await supabase
+        .from('program_enrollments')
+        .select(`
+          id,
+          status,
+          custom_form_data,
+          created_at,
+          candidate:candidates(
+            id, first_name, last_name, email, city, document_type, document_number, phone, gender, age
+          )
+        `)
+        .eq('cohort_id', coh.id);
+
+      if (!enrErr && enrs) {
+        setEnrollments(enrs);
+      } else if (enrErr) {
+        console.warn('Could not fetch enrollments:', enrErr);
+      }
+      
       setApplications(allApps);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -216,7 +237,7 @@ export function useApplicationsData() {
     await fetchData(); // Refresh
   };
 
-  return { applications, project, cohort, metrics, loading, error, updateApplication, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, loading, error, updateApplication, refetch: fetchData };
 }
 
 function assignAgeRange(age, ranges) {
