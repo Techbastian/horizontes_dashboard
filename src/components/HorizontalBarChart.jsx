@@ -9,6 +9,7 @@ export default function HorizontalBarChart({ data, title, subtitle, maxItems = 1
     .slice(0, maxItems);
 
   const maxValue = entries.length > 0 ? entries[0][1] : 1;
+  const totalValue = Object.values(data).reduce((a, b) => a + b, 0);
 
   return (
     <div>
@@ -35,7 +36,7 @@ export default function HorizontalBarChart({ data, title, subtitle, maxItems = 1
                     transitionDelay: `${i * 0.05}s`,
                   }}
                 >
-                  {pct > 15 ? `${((value / Object.values(data).reduce((a, b) => a + b, 0)) * 100).toFixed(0)}%` : ''}
+                  {totalValue > 0 ? `${((value / totalValue) * 100).toFixed(0)}%` : '0%'}
                 </div>
               </div>
             </div>
