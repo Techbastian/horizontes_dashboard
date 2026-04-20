@@ -62,6 +62,7 @@ export default function App() {
             element={
               <FormationPage
                 enrollments={enrollments}
+                applications={applications}
               />
             }
           />
