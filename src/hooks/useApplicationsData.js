@@ -204,6 +204,11 @@ export function useApplicationsData() {
       statusDistribution[s] = (statusDistribution[s] || 0) + 1;
     });
 
+    const reemplazos = withFases.filter(a => {
+      const grupo = a.grupoAsignado || '';
+      return grupo === 'Reemplazo' || grupo.toLowerCase().includes('respaldo');
+    });
+
     // Tasa de avance (elegibles / total)
     const tasaElegibilidad = total > 0 ? ((elegibles.length / total) * 100).toFixed(1) : 0;
 
@@ -213,6 +218,7 @@ export function useApplicationsData() {
       noElegibles: noElegibles.length,
       evaluados: evaluados.length,
       entrevistados: entrevistados.length,
+      reemplazos: reemplazos.length,
       avgPuntajeTecnico,
       tasaElegibilidad,
       grupoDistribution,

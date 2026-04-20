@@ -61,8 +61,8 @@ export default function DashboardPage({ metrics, applications }) {
         </div>
       </div>
 
-      {/* KPI Cards (6 cards) */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(6, 1fr)' }}>
+      {/* KPI Cards (5 cards) */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         <KPICard
           label="Total Postulados"
           value={metrics.total.toLocaleString()}
@@ -82,20 +82,20 @@ export default function DashboardPage({ metrics, applications }) {
           onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'Elegible' } })}
         />
         <KPICard
-          label="Evaluados"
-          value={metrics.evaluados.toLocaleString()}
-          icon="📝"
-          change={metrics.total > 0 ? parseFloat(((metrics.evaluados / metrics.total) * 100).toFixed(1)) : 0}
+          label="Lista Reemplazo"
+          value={metrics.reemplazos.toLocaleString()}
+          icon="🔄"
+          change={metrics.total > 0 ? parseFloat(((metrics.reemplazos / metrics.total) * 100).toFixed(1)) : 0}
           changeLabel="% del total"
           index={2}
-          onClick={() => navigate('/candidatos', { state: { requireFase2: true } })}
+          onClick={() => navigate('/formacion')}
         />
         <KPICard
           label="Form. Actitudinal"
           value={metrics.entrevistados.toLocaleString()}
           icon="🎤"
-          change={metrics.evaluados > 0 ? parseFloat(((metrics.entrevistados / metrics.evaluados) * 100).toFixed(1)) : 0}
-          changeLabel="% de evaluados"
+          change={metrics.elegibles > 0 ? parseFloat(((metrics.entrevistados / metrics.elegibles) * 100).toFixed(1)) : 0}
+          changeLabel="% de elegibles"
           index={3}
           onClick={() => navigate('/candidatos', { state: { requireFase3: true } })}
         />
@@ -107,15 +107,6 @@ export default function DashboardPage({ metrics, applications }) {
           changeLabel="% del total"
           index={4}
           onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'No elegible' } })}
-        />
-        <KPICard
-          label="Prom. Técnico"
-          value={metrics.avgPuntajeTecnico}
-          icon="⭐"
-          change={0}
-          changeLabel="de 15 puntos"
-          index={5}
-          onClick={() => navigate('/candidatos')}
         />
       </div>
 
