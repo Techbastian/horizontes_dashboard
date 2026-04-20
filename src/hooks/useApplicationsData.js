@@ -8,6 +8,7 @@ export function useApplicationsData() {
   const [cohort, setCohort] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [socioData, setSocioData] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -82,13 +83,26 @@ export function useApplicationsData() {
           custom_form_data,
           enrolled_at,
           candidate:candidates(
-            id, first_name, last_name, email, city, document_type, document_number, phone, gender, age
+            id, first_name, last_name, email, city, document_type, document_number, phone, gender, age, birth_date
           )
         `)
         .eq('cohort_id', coh.id);
 
       if (!enrErr && enrs) {
         setEnrollments(enrs);
+
+        const activeEnrolled = enrs.filter(e => e.custom_form_data?.estado_activo === true);
+        const activeCandidateIds = activeEnrolled.map(e => e.candidate?.id).filter(Boolean);
+
+        if (activeCandidateIds.length > 0) {
+          const { data: socio } = await supabase
+            .from('socio_demographic_data')
+            .select('candidate_id, gender_identity')
+            .in('candidate_id', activeCandidateIds);
+          setSocioData(socio || []);
+        } else {
+          setSocioData([]);
+        }
       } else if (enrErr) {
         console.warn('Could not fetch enrollments:', enrErr);
       }
@@ -227,6 +241,46 @@ export function useApplicationsData() {
       motivosDescarteDistribution[m] = (motivosDescarteDistribution[m] || 0) + 1;
     });
 
+    // Enrolled active candidates metrics
+    const genderMap = {};
+    socioData.forEach(s => {
+      if (s.gender_identity) genderMap[s.candidate_id] = s.gender_identity;
+    });
+
+    const activeEnrollments = enrollments.filter(e => e.custom_form_data?.estado_activo === true);
+    const totalEnrolledActive = activeEnrollments.length;
+
+    const enrolledGenderDistribution = {};
+    activeEnrollments.forEach(e => {
+      const cid = e.candidate?.id;
+      const gender = genderMap[cid] || e.candidate?.gender || 'Sin información';
+      enrolledGenderDistribution[gender] = (enrolledGenderDistribution[gender] || 0) + 1;
+    });
+
+    const enrolledAgeDistribMen = { '45-50': 0, '50-55': 0, '55-60': 0, '60-65': 0, '65-70': 0, '70-75': 0 };
+    const enrolledAgeDistribWomen = { '45-50': 0, '50-55': 0, '55-60': 0, '60-65': 0, '65-70': 0, '70-75': 0 };
+
+    activeEnrollments.forEach(e => {
+      const cid = e.candidate?.id;
+      const genderRaw = (genderMap[cid] || e.candidate?.gender || '').toLowerCase().trim();
+      const isMale = ['masculino', 'hombre', 'male'].some(v => genderRaw.includes(v)) || genderRaw === 'm';
+      const isFemale = ['femenino', 'mujer', 'female'].some(v => genderRaw.includes(v)) || genderRaw === 'f';
+
+      let age = e.candidate?.age || 0;
+      if ((!age || age === 0) && e.candidate?.birth_date) {
+        const birth = new Date(e.candidate.birth_date);
+        const today = new Date();
+        age = today.getFullYear() - birth.getFullYear();
+        const mo = today.getMonth() - birth.getMonth();
+        if (mo < 0 || (mo === 0 && today.getDate() < birth.getDate())) age--;
+      }
+
+      const range = getEnrolledAgeRange(age);
+      if (!range) return;
+      if (isMale) enrolledAgeDistribMen[range]++;
+      else if (isFemale) enrolledAgeDistribWomen[range]++;
+    });
+
     return {
       total,
       elegibles: elegibles.length,
@@ -246,8 +300,12 @@ export function useApplicationsData() {
       statusDistribution,
       motivosDescarteDistribution,
       withFases,
+      enrolledGenderDistribution,
+      enrolledAgeDistribMen,
+      enrolledAgeDistribWomen,
+      totalEnrolledActive,
     };
-  }, [applications]);
+  }, [applications, enrollments, socioData]);
 
   // Update an application's custom_answers
   const updateApplication = async (applicationId, updatedCustomAnswers) => {
@@ -261,6 +319,17 @@ export function useApplicationsData() {
   };
 
   return { applications, enrollments, project, cohort, metrics, loading, error, updateApplication, refetch: fetchData };
+}
+
+function getEnrolledAgeRange(age) {
+  if (!age || age < 45) return null;
+  if (age < 50) return '45-50';
+  if (age < 55) return '50-55';
+  if (age < 60) return '55-60';
+  if (age < 65) return '60-65';
+  if (age < 70) return '65-70';
+  if (age <= 75) return '70-75';
+  return null;
 }
 
 function assignAgeRange(age, ranges) {

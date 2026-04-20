@@ -247,6 +247,109 @@ export default function DashboardPage({ metrics, applications }) {
           />
         </div>
       </div>
+
+      {/* Age distribution by gender + overall gender for enrolled */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginTop: '24px' }}>
+        <AgeDonutCard
+          title="Rango de Edad – Hombres"
+          subtitle="Inscritos activos masculinos"
+          data={metrics.enrolledAgeDistribMen || {}}
+          colors={['#1d4ed8', '#3b82f6', '#60a5fa', '#93c5fd', '#2563eb', '#1e40af']}
+        />
+        <AgeDonutCard
+          title="Rango de Edad – Mujeres"
+          subtitle="Inscritas activas femeninas"
+          data={metrics.enrolledAgeDistribWomen || {}}
+          colors={['#be185d', '#ec4899', '#f9a8d4', '#db2777', '#f472b6', '#9d174d']}
+        />
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Distribución por Género</div>
+              <div className="card-subtitle">
+                {metrics.totalEnrolledActive || 0} personas seleccionadas
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <DonutChartWidget
+              data={filterNonZero(metrics.enrolledGenderDistribution || {})}
+              colors={['#7c3aed', '#0d9488', '#f97316', '#3b82f6', '#f43f5e']}
+              centerValue={metrics.totalEnrolledActive || 0}
+              centerLabel="Seleccionados"
+              size={180}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', paddingLeft: 8 }}>
+              {Object.entries(metrics.enrolledGenderDistribution || {})
+                .sort((a, b) => b[1] - a[1])
+                .map(([g, v], i) => {
+                  const colors = ['#7c3aed', '#0d9488', '#f97316', '#3b82f6', '#f43f5e'];
+                  const total = metrics.totalEnrolledActive || 1;
+                  const pct = ((v / total) * 100).toFixed(1);
+                  return (
+                    <div key={g} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 12, height: 12, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                        {g}: <strong style={{ color: 'var(--text-primary)' }}>{v}</strong>
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 11 }}>({pct}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function filterNonZero(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v > 0));
+}
+
+function AgeDonutCard({ title, subtitle, data, colors }) {
+  const filtered = filterNonZero(data);
+  const total = Object.values(filtered).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div>
+          <div className="card-title">{title}</div>
+          <div className="card-subtitle">{subtitle}</div>
+        </div>
+      </div>
+      {total === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon">📊</div>
+          <div className="empty-state-text">Sin datos disponibles</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <DonutChartWidget
+            data={filtered}
+            colors={colors}
+            centerValue={total}
+            centerLabel="personas"
+            size={180}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%', paddingLeft: 8 }}>
+            {Object.entries(data).map(([range, v], i) => {
+              const pct = total > 0 ? ((v / total) * 100).toFixed(1) : '0.0';
+              return (
+                <div key={range} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 12, height: 12, borderRadius: '50%', background: colors[i % colors.length], flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                    {range}: <strong style={{ color: 'var(--text-primary)' }}>{v}</strong>
+                    <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 11 }}>({pct}%)</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
