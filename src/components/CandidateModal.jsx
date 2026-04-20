@@ -29,6 +29,20 @@ export default function CandidateModal({ application, onClose, onUpdate }) {
   const fases = ca.seguimiento_fases || {};
   const candidate = application.candidate || {};
 
+  let computedAge = candidate.age;
+  if (!computedAge || computedAge === 0) {
+    if (candidate.birth_date) {
+      const birthDate = new Date(candidate.birth_date);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      computedAge = age > 0 ? age : 0;
+    }
+  }
+
   const [newGrupo, setNewGrupo] = useState(fases.grupo_asignado || '');
   const [descarteMotivo, setDescarteMotivo] = useState('');
   const [saving, setSaving] = useState(false);
@@ -99,7 +113,7 @@ export default function CandidateModal({ application, onClose, onUpdate }) {
               </div>
               <div className="modal-info-item">
                 <span className="modal-info-label">Edad</span>
-                <span className="modal-info-value">{candidate.age > 0 ? `${candidate.age} años` : '—'}</span>
+                <span className="modal-info-value">{computedAge > 0 ? `${computedAge} años` : '—'}</span>
               </div>
               <div className="modal-info-item">
                 <span className="modal-info-label">Municipio</span>
