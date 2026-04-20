@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 
-export default function FormationPage({ enrollments = [] }) {
+export default function FormationPage({ enrollments = [], applications = [] }) {
   const [activeTab, setActiveTab] = useState('Senior');
   const [search, setSearch] = useState('');
 
   // Extract profiles
   const profiles = useMemo(() => {
-    return enrollments.map(enr => {
+    const enrolledProfiles = enrollments.map(enr => {
       const c = enr.candidate || {};
       const custom = enr.custom_form_data || {};
       
@@ -27,7 +27,36 @@ export default function FormationPage({ enrollments = [] }) {
         isActive: custom.estado_activo !== false
       };
     });
-  }, [enrollments]);
+
+    const reemplazoProfiles = applications
+      .filter(app => {
+        const fases = app?.custom_answers?.seguimiento_fases || {};
+        return fases.grupo_asignado === 'Reemplazo' || fases.grupo_asignado?.toLowerCase().includes('respaldo');
+      })
+      .map(app => {
+        const c = app.candidate || {};
+        const fullName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Desconocido';
+        const doc = c.document_number || 'S/N';
+        
+        return {
+          id: app.id,
+          candidate_id: c.id,
+          status: app.status,
+          fullName,
+          doc,
+          ruta: 'Reemplazo',
+          email: c.email || '',
+          phone: c.phone || '',
+          city: c.city || 'Desconocido',
+          isActive: c.is_active !== false
+        };
+      });
+
+    const enrolledCandidateIds = new Set(enrolledProfiles.map(p => p.candidate_id));
+    const uniqueReemplazos = reemplazoProfiles.filter(p => !enrolledCandidateIds.has(p.candidate_id));
+
+    return [...enrolledProfiles, ...uniqueReemplazos];
+  }, [enrollments, applications]);
 
   const stats = useMemo(() => {
     return {
