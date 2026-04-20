@@ -163,6 +163,13 @@ export function useApplicationsData() {
       genderDistribution[g] = (genderDistribution[g] || 0) + 1;
     });
 
+    // Gender distribution for elegibles only
+    const genderDistributionElegibles = {};
+    elegibles.forEach(a => {
+      const g = a.candidate?.gender || 'Sin información';
+      genderDistributionElegibles[g] = (genderDistributionElegibles[g] || 0) + 1;
+    });
+
     // Education distribution
     const educationDistribution = {};
     withFases.forEach(a => {
@@ -232,6 +239,7 @@ export function useApplicationsData() {
       grupoDistribution,
       cityDistribution,
       genderDistribution,
+      genderDistributionElegibles,
       educationDistribution,
       ageRanges,
       funnelData,
