@@ -236,6 +236,17 @@ export default function DashboardPage({ metrics, applications }) {
           </div>
         </div>
       </div>
+
+      <div className="dashboard-grid-full" style={{ marginTop: '24px' }}>
+        <div className="card">
+          <HorizontalBarChart
+            data={metrics.motivosDescarteDistribution || {}}
+            title="Razones de No Elegibilidad"
+            subtitle="Distribución de motivos de descarte"
+            maxItems={10}
+          />
+        </div>
+      </div>
     </div>
   );
 }

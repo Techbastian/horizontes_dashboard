@@ -212,6 +212,14 @@ export function useApplicationsData() {
     // Tasa de avance (elegibles / total)
     const tasaElegibilidad = total > 0 ? ((elegibles.length / total) * 100).toFixed(1) : 0;
 
+    // Motivos descarte distribution
+    const motivosDescarteDistribution = {};
+    noElegibles.forEach(a => {
+      let m = a.motivoDescarte;
+      if (!m || m === 'N/A') m = 'No especificado';
+      motivosDescarteDistribution[m] = (motivosDescarteDistribution[m] || 0) + 1;
+    });
+
     return {
       total,
       elegibles: elegibles.length,
@@ -228,6 +236,7 @@ export function useApplicationsData() {
       ageRanges,
       funnelData,
       statusDistribution,
+      motivosDescarteDistribution,
       withFases,
     };
   }, [applications]);

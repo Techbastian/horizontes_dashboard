@@ -677,6 +677,8 @@ body {
 
 .funnel-step-row:last-child {
   border-bottom: none;
+  padding-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .funnel-step-row:hover {
