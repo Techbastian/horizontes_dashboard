@@ -34,11 +34,16 @@ export default function FormationPage({ enrollments = [] }) {
       total: profiles.length,
       senior: profiles.filter(p => p.ruta === 'Senior').length,
       junior: profiles.filter(p => p.ruta === 'Junior').length,
+      reemplazo: profiles.filter(p => p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo')).length,
     };
   }, [profiles]);
 
   const filtered = useMemo(() => {
-    const list = profiles.filter(p => p.ruta === activeTab);
+    const list = profiles.filter(p => 
+      activeTab === 'Reemplazo' 
+        ? (p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo'))
+        : p.ruta === activeTab
+    );
     if (!search) return list;
     
     const s = search.toLowerCase();
@@ -60,7 +65,7 @@ export default function FormationPage({ enrollments = [] }) {
       </div>
 
       {/* KPI Stats */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: '32px' }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '32px' }}>
         <div className="kpi-card" style={{ animationDelay: '0s' }}>
           <div className="kpi-label"><span className="kpi-label-icon">🎓</span>Total Matriculados</div>
           <div className="kpi-value">{stats.total}</div>
@@ -74,6 +79,11 @@ export default function FormationPage({ enrollments = [] }) {
           <div className="kpi-label"><span className="kpi-label-icon">🌱</span>Ruta Junior</div>
           <div className="kpi-value">{stats.junior}</div>
           <div className="kpi-change neutral">Participantes confirmados</div>
+        </div>
+        <div className="kpi-card" style={{ animationDelay: '0.3s' }}>
+          <div className="kpi-label"><span className="kpi-label-icon">🔄</span>Lista Reemplazo</div>
+          <div className="kpi-value">{stats.reemplazo}</div>
+          <div className="kpi-change negative">Participantes en espera</div>
         </div>
       </div>
 
@@ -96,6 +106,14 @@ export default function FormationPage({ enrollments = [] }) {
             style={{ padding: '12px 16px', background: 'transparent', borderBottom: activeTab === 'Junior' ? '2px solid var(--accent-violet)' : 'none', borderRadius: 0, fontWeight: activeTab === 'Junior' ? '700' : '500', display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             Ruta Junior <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>{stats.junior}</span>
+          </button>
+
+          <button 
+            className={`nav-item ${activeTab === 'Reemplazo' ? 'active' : ''}`}
+            onClick={() => setActiveTab('Reemplazo')}
+            style={{ padding: '12px 16px', background: 'transparent', borderBottom: activeTab === 'Reemplazo' ? '2px solid #f59e0b' : 'none', borderRadius: 0, fontWeight: activeTab === 'Reemplazo' ? '700' : '500', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            Lista de Reemplazo <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>{stats.reemplazo}</span>
           </button>
         </div>
 
