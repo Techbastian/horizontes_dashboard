@@ -248,6 +248,126 @@ export default function DashboardPage({ metrics, applications }) {
         </div>
       </div>
 
+      {/* Cuidadores section */}
+      {metrics.cuidadores && (
+        <div className="dashboard-grid-full" style={{ marginTop: '24px' }}>
+          <div className="card">
+            <div className="card-header">
+              <div>
+                <div className="card-title">Personas Cuidadoras</div>
+                <div className="card-subtitle">Perfil cuidador desagregado por género y selección final</div>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{ width: 'auto', padding: '6px 14px' }}
+                onClick={() => navigate('/candidatos', { state: { filterCuidador: true } })}
+              >
+                Ver todos →
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '8px' }}>
+              {/* Elegidos */}
+              <div style={{ background: 'rgba(13,148,136,0.07)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(13,148,136,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cuidadores en Selección Final</div>
+                    <div
+                      style={{ fontSize: '36px', fontWeight: '800', color: '#0d9488', cursor: 'pointer', lineHeight: 1.1, marginTop: 4 }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
+                      title="Ver lista filtrada"
+                    >
+                      {metrics.cuidadores.elegidos}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '28px', opacity: 0.5 }}>⭐</div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Hombres</div>
+                    <div
+                      style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6', cursor: 'pointer' }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
+                    >
+                      {metrics.cuidadores.hombresElegidos}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Mujeres</div>
+                    <div
+                      style={{ fontSize: '24px', fontWeight: '700', color: '#ec4899', cursor: 'pointer' }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
+                    >
+                      {metrics.cuidadores.mujeresElegidas}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* No elegidos */}
+              <div style={{ background: 'rgba(148,163,184,0.05)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(148,163,184,0.15)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cuidadores No Seleccionados</div>
+                    <div
+                      style={{ fontSize: '36px', fontWeight: '800', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.1, marginTop: 4 }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
+                      title="Ver lista filtrada"
+                    >
+                      {metrics.cuidadores.noElegidos}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '28px', opacity: 0.4 }}>🤲</div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Hombres</div>
+                    <div
+                      style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
+                    >
+                      {metrics.cuidadores.hombresNoElegidos}
+                    </div>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Mujeres</div>
+                    <div
+                      style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
+                    >
+                      {metrics.cuidadores.mujeresNoElegidas}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Total bar */}
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Total cuidadores:</div>
+              <div
+                style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', cursor: 'pointer' }}
+                onClick={() => navigate('/candidatos', { state: { filterCuidador: true } })}
+                title="Ver todos los cuidadores"
+              >
+                {metrics.cuidadores.total}
+              </div>
+              <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(148,163,184,0.1)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%',
+                  width: `${metrics.cuidadores.total > 0 ? (metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100 : 0}%`,
+                  background: 'linear-gradient(90deg, #0d9488, #7c3aed)',
+                  borderRadius: '3px',
+                  transition: 'width 0.6s ease',
+                }} />
+              </div>
+              <div style={{ fontSize: '13px', color: '#0d9488', fontWeight: '600' }}>
+                {metrics.cuidadores.total > 0 ? Math.round((metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100) : 0}% en selección final
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Age distribution by gender + overall gender for enrolled */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginTop: '24px' }}>
         <AgeDonutCard

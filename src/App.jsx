@@ -53,6 +53,7 @@ export default function App() {
             element={
               <CandidatesPage
                 applications={applications}
+                enrollments={enrollments}
                 updateApplication={updateApplication}
               />
             }

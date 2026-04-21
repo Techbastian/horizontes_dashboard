@@ -2,7 +2,7 @@ import { useState } from 'react';
 import CandidateTable from '../components/CandidateTable';
 import CandidateModal from '../components/CandidateModal';
 
-export default function CandidatesPage({ applications, updateApplication }) {
+export default function CandidatesPage({ applications, enrollments, updateApplication }) {
   const [selectedApp, setSelectedApp] = useState(null);
 
   return (
@@ -20,6 +20,7 @@ export default function CandidatesPage({ applications, updateApplication }) {
       <div className="card">
         <CandidateTable
           applications={applications}
+          enrollments={enrollments}
           onSelectCandidate={setSelectedApp}
         />
       </div>

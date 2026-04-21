@@ -241,6 +241,38 @@ export function useApplicationsData() {
       motivosDescarteDistribution[m] = (motivosDescarteDistribution[m] || 0) + 1;
     });
 
+    // Enrolled candidate IDs set (for cross-referencing)
+    const enrolledCandidateIds = new Set(
+      enrollments
+        .filter(e => e.custom_form_data?.estado_activo === true)
+        .map(e => e.candidate?.id)
+        .filter(Boolean)
+    );
+
+    // Cuidadores metrics (from project_applications.custom_answers.es_cuidador)
+    const isMaleG = (g) => { const s = (g || '').toLowerCase().trim(); return ['masculino', 'hombre', 'male'].some(v => s.includes(v)) || s === 'm'; };
+    const isFemaleG = (g) => { const s = (g || '').toLowerCase().trim(); return ['femenino', 'mujer', 'female'].some(v => s.includes(v)) || s === 'f'; };
+
+    const cuidadoresAll = withFases.filter(a => a.custom_answers?.es_cuidador === true);
+    const cuidadoresHombres = cuidadoresAll.filter(a => isMaleG(a.candidate?.gender));
+    const cuidadoresMujeres = cuidadoresAll.filter(a => isFemaleG(a.candidate?.gender));
+    const cuidadoresElegidos = cuidadoresAll.filter(a => enrolledCandidateIds.has(a.candidate?.id));
+    const cuidadoresNoElegidos = cuidadoresAll.filter(a => !enrolledCandidateIds.has(a.candidate?.id));
+
+    const cuidadores = {
+      total: cuidadoresAll.length,
+      hombres: cuidadoresHombres.length,
+      mujeres: cuidadoresMujeres.length,
+      elegidos: cuidadoresElegidos.length,
+      noElegidos: cuidadoresNoElegidos.length,
+      hombresElegidos: cuidadoresHombres.filter(a => enrolledCandidateIds.has(a.candidate?.id)).length,
+      mujeresElegidas: cuidadoresMujeres.filter(a => enrolledCandidateIds.has(a.candidate?.id)).length,
+      hombresNoElegidos: cuidadoresHombres.filter(a => !enrolledCandidateIds.has(a.candidate?.id)).length,
+      mujeresNoElegidas: cuidadoresMujeres.filter(a => !enrolledCandidateIds.has(a.candidate?.id)).length,
+    };
+
+    const enrolledCandidateIdsArray = [...enrolledCandidateIds];
+
     // Enrolled active candidates metrics
     const genderMap = {};
     socioData.forEach(s => {
@@ -304,6 +336,8 @@ export function useApplicationsData() {
       enrolledAgeDistribMen,
       enrolledAgeDistribWomen,
       totalEnrolledActive,
+      cuidadores,
+      enrolledCandidateIdsArray,
     };
   }, [applications, enrollments, socioData]);
 

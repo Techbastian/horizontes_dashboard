@@ -17,7 +17,7 @@ function getGrupoBadgeClass(grupo) {
   return 'badge-sin-asignar';
 }
 
-export default function CandidateTable({ applications, onSelectCandidate }) {
+export default function CandidateTable({ applications, enrollments, onSelectCandidate }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -26,6 +26,8 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
   const [filterElegibilidad, setFilterElegibilidad] = useState('');
   const [filterFase2, setFilterFase2] = useState(false);
   const [filterFase3, setFilterFase3] = useState(false);
+  const [filterCuidador, setFilterCuidador] = useState(false);
+  const [filterEnrolled, setFilterEnrolled] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
@@ -37,6 +39,8 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
       if (location.state.filterElegibilidad !== undefined) setFilterElegibilidad(location.state.filterElegibilidad);
       if (location.state.requireFase2 !== undefined) setFilterFase2(location.state.requireFase2);
       if (location.state.requireFase3 !== undefined) setFilterFase3(location.state.requireFase3);
+      if (location.state.filterCuidador !== undefined) setFilterCuidador(location.state.filterCuidador);
+      if (location.state.filterEnrolled !== undefined) setFilterEnrolled(location.state.filterEnrolled);
       setPage(1);
     }
   }, [location.state]);
@@ -47,8 +51,10 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     setFilterElegibilidad('');
     setFilterFase2(false);
     setFilterFase3(false);
+    setFilterCuidador(false);
+    setFilterEnrolled('');
     setPage(1);
-    navigate(location.pathname, { replace: true, state: {} }); // Clear router state
+    navigate(location.pathname, { replace: true, state: {} });
   };
 
   // Extract filter options
@@ -68,12 +74,18 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
 
   // Enriched data
   const enriched = useMemo(() => {
+    const enrolledSet = new Set(
+      (enrollments || [])
+        .filter(e => e.custom_form_data?.estado_activo === true)
+        .map(e => e.candidate?.id)
+        .filter(Boolean)
+    );
+
     return applications.map(app => {
       const ca = app.custom_answers || {};
       const fases = ca.seguimiento_fases || {};
       const isRejected = fases.elegibilidad === 'rejected';
 
-      // Parse puntajes taking 'N/A' into account
       const pFase2 = (typeof fases.puntaje_tecnico === 'number') ? fases.puntaje_tecnico : null;
       let pFase3 = null;
       if (typeof fases.puntaje_entrevista === 'number') {
@@ -93,9 +105,11 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         puntajeActitudinal: isRejected ? null : pFase3,
         puntajeTotal: isRejected ? null : (typeof fases.puntaje_total === 'number' ? fases.puntaje_total : null),
         email: app.candidate?.email || '',
+        esCuidador: ca.es_cuidador === true,
+        isFinalSelected: enrolledSet.has(app.candidate?.id),
       };
     });
-  }, [applications]);
+  }, [applications, enrollments]);
 
   // Filtered & sorted
   const filtered = useMemo(() => {
@@ -114,6 +128,9 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     if (filterElegibilidad) result = result.filter(a => a.elegibilidadStatus === filterElegibilidad);
     if (filterFase2) result = result.filter(a => a.puntajeTecnico !== null && a.puntajeTecnico > 0);
     if (filterFase3) result = result.filter(a => a.puntajeActitudinal !== null && a.puntajeActitudinal > 0);
+    if (filterCuidador) result = result.filter(a => a.esCuidador);
+    if (filterEnrolled === 'yes') result = result.filter(a => a.isFinalSelected);
+    if (filterEnrolled === 'no') result = result.filter(a => !a.isFinalSelected);
 
     // Sort
     result.sort((a, b) => {
@@ -136,7 +153,7 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
     });
 
     return result;
-  }, [enriched, search, filterGrupo, filterElegibilidad, filterFase2, filterFase3, sortField, sortDir]);
+  }, [enriched, search, filterGrupo, filterElegibilidad, filterFase2, filterFase3, filterCuidador, filterEnrolled, sortField, sortDir]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -233,10 +250,13 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         </select>
         
         {/* Ad hoc filter indicators */}
-        {(filterFase2 || filterFase3) && (
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--accent-teal)' }}>
+        {(filterFase2 || filterFase3 || filterCuidador || filterEnrolled) && (
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--accent-teal)', flexWrap: 'wrap' }}>
             {filterFase2 && <span>✅ Evaluados</span>}
             {filterFase3 && <span>✅ Formulario Actitudinal</span>}
+            {filterCuidador && <span>🤲 Cuidadores</span>}
+            {filterEnrolled === 'yes' && <span>⭐ Selección Final</span>}
+            {filterEnrolled === 'no' && <span>↩ No en Selección Final</span>}
           </div>
         )}
 
@@ -254,20 +274,23 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
         <table className="data-table">
           <thead>
             <tr>
-              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')} style={{ width: '22%' }}>
+              <th className={sortField === 'name' ? 'sorted' : ''} onClick={() => handleSort('name')} style={{ width: '20%' }}>
                 Candidato <SortIcon field="name" />
               </th>
               <th className={sortField === 'elegibilidad' ? 'sorted' : ''} onClick={() => handleSort('elegibilidad')}>
                 Fase 1: Elegibilidad <SortIcon field="elegibilidad" />
               </th>
-              <th className={sortField === 'tecnico' ? 'sorted' : ''} onClick={() => handleSort('tecnico')} style={{ width: '13%' }}>
-                Fase 2: Prueba Técnica <SortIcon field="tecnico" />
+              <th className={sortField === 'tecnico' ? 'sorted' : ''} onClick={() => handleSort('tecnico')} style={{ width: '12%' }}>
+                Fase 2: Técnica <SortIcon field="tecnico" />
               </th>
-              <th className={sortField === 'actitudinal' ? 'sorted' : ''} onClick={() => handleSort('actitudinal')} style={{ width: '18%' }}>
-                Fase 3: Formulario Actitudinal <SortIcon field="actitudinal" />
+              <th className={sortField === 'actitudinal' ? 'sorted' : ''} onClick={() => handleSort('actitudinal')} style={{ width: '15%' }}>
+                Fase 3: Actitudinal <SortIcon field="actitudinal" />
               </th>
-              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ width: '20%' }}>
-                Fase 4: Asignación Final <SortIcon field="grupo" />
+              <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ width: '17%' }}>
+                Fase 4: Asignación <SortIcon field="grupo" />
+              </th>
+              <th style={{ width: '13%', textAlign: 'center' }}>
+                Selección Final
               </th>
             </tr>
           </thead>
@@ -277,6 +300,9 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                 <td>
                   <div className="table-name">{app.fullName}</div>
                   <div className="table-sub">{app.email}</div>
+                  {app.esCuidador && (
+                    <div style={{ fontSize: '10px', color: '#0d9488', marginTop: 2, fontWeight: 600 }}>🤲 Cuidador/a</div>
+                  )}
                 </td>
                 <td>
                   <span className={`badge ${app.isRejected ? 'badge-rechazado' : 'badge-pendiente'}`} style={{ backgroundColor: app.isRejected ? '#f43f5e20' : '#10b98120', color: app.isRejected ? '#f43f5e' : '#10b981' }}>
@@ -308,6 +334,12 @@ export default function CandidateTable({ applications, onSelectCandidate }) {
                 </td>
                 <td>
                   {renderAssignment(app)}
+                </td>
+                <td style={{ textAlign: 'center' }}>
+                  {app.isFinalSelected
+                    ? <span className="badge" style={{ backgroundColor: '#0d948820', color: '#0d9488', fontWeight: 700 }}>⭐ Inscrito</span>
+                    : <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>—</span>
+                  }
                 </td>
               </tr>
             ))}
