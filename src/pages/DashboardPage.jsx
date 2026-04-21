@@ -248,9 +248,9 @@ export default function DashboardPage({ metrics, applications }) {
         </div>
       </div>
 
-      {/* Cuidadores section */}
+      {/* Cuidadores section — full width */}
       {metrics.cuidadores && (
-        <div className="dashboard-grid-full" style={{ marginTop: '24px' }}>
+        <div style={{ marginTop: '24px' }}>
           <div className="card">
             <div className="card-header">
               <div>
@@ -265,104 +265,127 @@ export default function DashboardPage({ metrics, applications }) {
                 Ver todos →
               </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '8px' }}>
-              {/* Elegidos */}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 2fr', gap: '16px', marginTop: '12px' }}>
+
+              {/* Column 1 — Total resumen */}
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '20px', padding: '20px', background: 'rgba(124,58,237,0.06)', borderRadius: '12px', border: '1px solid rgba(124,58,237,0.15)' }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>Total cuidadores</div>
+                  <div
+                    style={{ fontSize: '48px', fontWeight: '900', color: 'var(--text-primary)', cursor: 'pointer', lineHeight: 1 }}
+                    onClick={() => navigate('/candidatos', { state: { filterCuidador: true } })}
+                    title="Ver todos los cuidadores"
+                  >
+                    {metrics.cuidadores.total}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
+                    <span>En selección final</span>
+                    <span style={{ color: '#0d9488', fontWeight: '700' }}>
+                      {metrics.cuidadores.total > 0 ? Math.round((metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div style={{ height: '8px', borderRadius: '4px', background: 'rgba(148,163,184,0.1)', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${metrics.cuidadores.total > 0 ? (metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100 : 0}%`,
+                      background: 'linear-gradient(90deg, #7c3aed, #0d9488)',
+                      borderRadius: '4px',
+                    }} />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px' }}>Hombres</div>
+                    <div style={{ fontSize: '22px', fontWeight: '700', color: '#3b82f6' }}>{metrics.cuidadores.hombres}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '2px' }}>Mujeres</div>
+                    <div style={{ fontSize: '22px', fontWeight: '700', color: '#ec4899' }}>{metrics.cuidadores.mujeres}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2 — Elegidos */}
               <div style={{ background: 'rgba(13,148,136,0.07)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(13,148,136,0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cuidadores en Selección Final</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>En Selección Final</div>
                     <div
-                      style={{ fontSize: '36px', fontWeight: '800', color: '#0d9488', cursor: 'pointer', lineHeight: 1.1, marginTop: 4 }}
+                      style={{ fontSize: '48px', fontWeight: '900', color: '#0d9488', cursor: 'pointer', lineHeight: 1 }}
                       onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
                       title="Ver lista filtrada"
                     >
                       {metrics.cuidadores.elegidos}
                     </div>
                   </div>
-                  <div style={{ fontSize: '28px', opacity: 0.5 }}>⭐</div>
+                  <div style={{ fontSize: '32px', opacity: 0.4 }}>⭐</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Hombres</div>
-                    <div
-                      style={{ fontSize: '24px', fontWeight: '700', color: '#3b82f6', cursor: 'pointer' }}
-                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
-                    >
-                      {metrics.cuidadores.hombresElegidos}
+                  <div
+                    style={{ background: 'rgba(59,130,246,0.1)', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(59,130,246,0.15)' }}
+                    onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
+                  >
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Hombres</div>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: '#3b82f6' }}>{metrics.cuidadores.hombresElegidos}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {metrics.cuidadores.elegidos > 0 ? Math.round((metrics.cuidadores.hombresElegidos / metrics.cuidadores.elegidos) * 100) : 0}%
                     </div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Mujeres</div>
-                    <div
-                      style={{ fontSize: '24px', fontWeight: '700', color: '#ec4899', cursor: 'pointer' }}
-                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
-                    >
-                      {metrics.cuidadores.mujeresElegidas}
+                  <div
+                    style={{ background: 'rgba(236,72,153,0.1)', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(236,72,153,0.15)' }}
+                    onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'yes' } })}
+                  >
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Mujeres</div>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: '#ec4899' }}>{metrics.cuidadores.mujeresElegidas}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {metrics.cuidadores.elegidos > 0 ? Math.round((metrics.cuidadores.mujeresElegidas / metrics.cuidadores.elegidos) * 100) : 0}%
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* No elegidos */}
-              <div style={{ background: 'rgba(148,163,184,0.05)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(148,163,184,0.15)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              {/* Column 3 — No elegidos */}
+              <div style={{ background: 'rgba(148,163,184,0.05)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(148,163,184,0.12)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
-                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cuidadores No Seleccionados</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>No Seleccionados</div>
                     <div
-                      style={{ fontSize: '36px', fontWeight: '800', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1.1, marginTop: 4 }}
+                      style={{ fontSize: '48px', fontWeight: '900', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1 }}
                       onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
                       title="Ver lista filtrada"
                     >
                       {metrics.cuidadores.noElegidos}
                     </div>
                   </div>
-                  <div style={{ fontSize: '28px', opacity: 0.4 }}>🤲</div>
+                  <div style={{ fontSize: '32px', opacity: 0.35 }}>🤲</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Hombres</div>
-                    <div
-                      style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
-                    >
-                      {metrics.cuidadores.hombresNoElegidos}
+                  <div
+                    style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.06)' }}
+                    onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
+                  >
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Hombres</div>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-secondary)' }}>{metrics.cuidadores.hombresNoElegidos}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {metrics.cuidadores.noElegidos > 0 ? Math.round((metrics.cuidadores.hombresNoElegidos / metrics.cuidadores.noElegidos) * 100) : 0}%
                     </div>
                   </div>
-                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Mujeres</div>
-                    <div
-                      style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-secondary)', cursor: 'pointer' }}
-                      onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
-                    >
-                      {metrics.cuidadores.mujeresNoElegidas}
+                  <div
+                    style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '10px', padding: '16px', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.06)' }}
+                    onClick={() => navigate('/candidatos', { state: { filterCuidador: true, filterEnrolled: 'no' } })}
+                  >
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Mujeres</div>
+                    <div style={{ fontSize: '32px', fontWeight: '800', color: 'var(--text-secondary)' }}>{metrics.cuidadores.mujeresNoElegidas}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {metrics.cuidadores.noElegidos > 0 ? Math.round((metrics.cuidadores.mujeresNoElegidas / metrics.cuidadores.noElegidos) * 100) : 0}%
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Total bar */}
-            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '16px', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px' }}>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Total cuidadores:</div>
-              <div
-                style={{ fontSize: '20px', fontWeight: '800', color: 'var(--text-primary)', cursor: 'pointer' }}
-                onClick={() => navigate('/candidatos', { state: { filterCuidador: true } })}
-                title="Ver todos los cuidadores"
-              >
-                {metrics.cuidadores.total}
-              </div>
-              <div style={{ flex: 1, height: '6px', borderRadius: '3px', background: 'rgba(148,163,184,0.1)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${metrics.cuidadores.total > 0 ? (metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100 : 0}%`,
-                  background: 'linear-gradient(90deg, #0d9488, #7c3aed)',
-                  borderRadius: '3px',
-                  transition: 'width 0.6s ease',
-                }} />
-              </div>
-              <div style={{ fontSize: '13px', color: '#0d9488', fontWeight: '600' }}>
-                {metrics.cuidadores.total > 0 ? Math.round((metrics.cuidadores.elegidos / metrics.cuidadores.total) * 100) : 0}% en selección final
-              </div>
             </div>
           </div>
         </div>
