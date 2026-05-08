@@ -9,6 +9,8 @@ export function useApplicationsData() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [socioData, setSocioData] = useState([]);
+  const [courseStatus, setCourseStatus] = useState([]);
+  const [coursesList, setCoursesList] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -108,6 +110,22 @@ export function useApplicationsData() {
       }
       
       setApplications(allApps);
+
+      // 5. Get course progress (formation phase)
+      const { data: csRaw } = await supabase
+        .from('cohort_course_status')
+        .select('candidate_id, course_id, percent_complete, is_active_enrollment')
+        .eq('cohort_id', coh.id);
+
+      if (csRaw && csRaw.length > 0) {
+        setCourseStatus(csRaw);
+        const courseIds = [...new Set(csRaw.map(c => c.course_id))];
+        const { data: crsRaw } = await supabase
+          .from('education_library')
+          .select('id, title')
+          .in('id', courseIds);
+        setCoursesList(crsRaw || []);
+      }
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message || 'Error al cargar datos');
@@ -119,6 +137,79 @@ export function useApplicationsData() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Formation progress computed from cohort_course_status
+  const formationProgress = useMemo(() => {
+    if (!courseStatus.length || !enrollments.length) return null;
+
+    const courseNameMap = {};
+    coursesList.forEach(c => { courseNameMap[c.id] = c.title; });
+
+    // Determine track (Jr/Sr) per candidate from course title
+    const getTrack = (courseTitle) => {
+      if (!courseTitle) return 'Jr';
+      return courseTitle.includes(' Sr') ? 'Sr' : 'Jr';
+    };
+
+    // Group rows by candidate_id
+    const byCandidate = {};
+    courseStatus.forEach(row => {
+      if (!byCandidate[row.candidate_id]) {
+        byCandidate[row.candidate_id] = {
+          isActive: row.is_active_enrollment,
+          routes: [],
+        };
+      }
+      const courseName = courseNameMap[row.course_id] || row.course_id;
+      byCandidate[row.candidate_id].routes.push({
+        courseId: row.course_id,
+        name: courseName,
+        pct: typeof row.percent_complete === 'number' ? row.percent_complete : 0,
+      });
+      if (row.is_active_enrollment) byCandidate[row.candidate_id].isActive = true;
+    });
+
+    // Build enrollment lookup for candidate name/email
+    const enrollmentMap = {};
+    enrollments.forEach(e => {
+      if (e.candidate?.id) enrollmentMap[e.candidate.id] = e.candidate;
+    });
+
+    const participants = Object.entries(byCandidate).map(([candidateId, data]) => {
+      const candidate = enrollmentMap[candidateId];
+      const routes = [...data.routes].sort((a, b) => a.name.localeCompare(b.name));
+      const track = routes.length > 0 ? getTrack(routes[0].name) : 'Jr';
+      const avgProgress = routes.length > 0
+        ? routes.reduce((s, r) => s + r.pct, 0) / routes.length
+        : 0;
+
+      return {
+        candidateId,
+        name: candidate ? `${candidate.first_name} ${candidate.last_name}` : 'Desconocido',
+        email: candidate?.email || '',
+        track,
+        isActive: data.isActive,
+        avgProgress: Math.round(avgProgress * 10) / 10,
+        routes,
+      };
+    }).sort((a, b) => b.avgProgress - a.avgProgress);
+
+    const active = participants.filter(p => p.isActive);
+    const inactive = participants.filter(p => !p.isActive);
+    const globalAvg = active.length > 0
+      ? Math.round((active.reduce((s, p) => s + p.avgProgress, 0) / active.length) * 10) / 10
+      : 0;
+
+    const distribution = { '0–25%': 0, '25–50%': 0, '50–75%': 0, '75–100%': 0 };
+    active.forEach(p => {
+      if (p.avgProgress < 25) distribution['0–25%']++;
+      else if (p.avgProgress < 50) distribution['25–50%']++;
+      else if (p.avgProgress < 75) distribution['50–75%']++;
+      else distribution['75–100%']++;
+    });
+
+    return { participants, active, inactive, globalAvg, distribution };
+  }, [courseStatus, coursesList, enrollments]);
 
   // Computed metrics
   const metrics = useMemo(() => {
@@ -352,7 +443,7 @@ export function useApplicationsData() {
     await fetchData(); // Refresh
   };
 
-  return { applications, enrollments, project, cohort, metrics, loading, error, updateApplication, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, formationProgress, loading, error, updateApplication, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {

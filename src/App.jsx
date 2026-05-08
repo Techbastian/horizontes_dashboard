@@ -28,7 +28,7 @@ function ErrorScreen({ message, onRetry }) {
 }
 
 export default function App() {
-  const { applications, enrollments, project, cohort, metrics, loading, error, updateApplication, refetch } = useApplicationsData();
+  const { applications, enrollments, project, cohort, metrics, formationProgress, loading, error, updateApplication, refetch } = useApplicationsData();
 
   if (loading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
@@ -45,6 +45,7 @@ export default function App() {
                 applications={applications}
                 project={project}
                 cohort={cohort}
+                formationProgress={formationProgress}
               />
             }
           />

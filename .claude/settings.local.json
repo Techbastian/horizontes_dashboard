@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\" -Recurse -Directory -Depth 3 | Select-Object -ExpandProperty FullName | ForEach-Object { $_ -replace [regex]::Escape\\(\"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\"\\), \".\" } | Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\\\\src\" -Recurse -File | Select-Object -ExpandProperty FullName | ForEach-Object { $_ -replace [regex]::Escape\\(\"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\\\\src\"\\), \"\" })",
+      "Bash(node scripts/upload_formacion.mjs)"
+    ]
+  }
+}

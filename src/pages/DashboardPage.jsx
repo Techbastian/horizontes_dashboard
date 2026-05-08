@@ -3,6 +3,7 @@ import KPICard from '../components/KPICard';
 import FunnelChart from '../components/FunnelChart';
 import DonutChartWidget from '../components/DonutChart';
 import HorizontalBarChart from '../components/HorizontalBarChart';
+import FormationProgressSection from '../components/FormationProgressSection';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function CustomTooltip({ active, payload, label }) {
@@ -34,7 +35,7 @@ function buildTrendData(applications) {
     .slice(-14);
 }
 
-export default function DashboardPage({ metrics, applications }) {
+export default function DashboardPage({ metrics, applications, formationProgress }) {
   const navigate = useNavigate();
 
   if (!metrics) return null;
@@ -379,6 +380,9 @@ export default function DashboardPage({ metrics, applications }) {
           </div>
         </div>
       )}
+
+      {/* Progreso de Nivelación */}
+      <FormationProgressSection formationProgress={formationProgress} />
 
       {/* Razones de No Elegibilidad + Donas: fila de 4 columnas */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '24px', marginTop: '24px' }}>
