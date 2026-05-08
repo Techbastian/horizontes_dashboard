@@ -440,10 +440,34 @@ export function useApplicationsData() {
       .eq('id', applicationId);
 
     if (updateErr) throw updateErr;
-    await fetchData(); // Refresh
+    await fetchData();
   };
 
-  return { applications, enrollments, project, cohort, metrics, formationProgress, loading, error, updateApplication, refetch: fetchData };
+  // Update enrollment (ruta_asignada, estado_activo, status)
+  const updateEnrollment = async (enrollmentId, updates) => {
+    const current = enrollments.find(e => e.id === enrollmentId);
+    if (!current) throw new Error('Enrollment no encontrado');
+
+    const payload = {};
+
+    if (updates.custom_form_data !== undefined) {
+      payload.custom_form_data = {
+        ...(current.custom_form_data || {}),
+        ...updates.custom_form_data,
+      };
+    }
+    if (updates.status !== undefined) payload.status = updates.status;
+
+    const { error: updateErr } = await supabase
+      .from('program_enrollments')
+      .update(payload)
+      .eq('id', enrollmentId);
+
+    if (updateErr) throw updateErr;
+    await fetchData();
+  };
+
+  return { applications, enrollments, project, cohort, metrics, formationProgress, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {

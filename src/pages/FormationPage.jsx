@@ -1,19 +1,47 @@
 import { useState, useMemo } from 'react';
+import ParticipantDetailModal from '../components/ParticipantDetailModal';
 
-export default function FormationPage({ enrollments = [], applications = [] }) {
+function progressColor(pct) {
+  if (pct >= 75) return '#10b981';
+  if (pct >= 40) return '#f97316';
+  return '#ef4444';
+}
+
+function MiniProgressBar({ pct }) {
+  if (pct === null || pct === undefined) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ width: 80, background: '#1e293b', borderRadius: 99, height: 6, overflow: 'hidden' }}>
+        <div style={{
+          width: `${Math.min(pct, 100)}%`, height: '100%',
+          background: progressColor(pct), borderRadius: 99,
+        }} />
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(pct), minWidth: 34 }}>{pct}%</span>
+    </div>
+  );
+}
+
+export default function FormationPage({ enrollments = [], applications = [], formationProgress, updateEnrollment }) {
   const [activeTab, setActiveTab] = useState('Senior');
   const [search, setSearch] = useState('');
+  const [selectedProfile, setSelectedProfile] = useState(null);
 
-  // Extract profiles
+  // Build a map: candidate_id → courseProgress
+  const progressByCandidateId = useMemo(() => {
+    if (!formationProgress) return {};
+    const map = {};
+    formationProgress.participants.forEach(p => { map[p.candidateId] = p; });
+    return map;
+  }, [formationProgress]);
+
   const profiles = useMemo(() => {
     const enrolledProfiles = enrollments.map(enr => {
       const c = enr.candidate || {};
       const custom = enr.custom_form_data || {};
-      
       const ruta = custom.ruta_asignada || 'Sin asignar';
       const fullName = custom.nombre_completo || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Desconocido';
       const doc = custom.cedula || c.document_number || 'S/N';
-      
       return {
         id: enr.id,
         candidate_id: c.id,
@@ -24,7 +52,8 @@ export default function FormationPage({ enrollments = [], applications = [] }) {
         email: c.email || '',
         phone: c.phone || '',
         city: c.city || 'Desconocido',
-        isActive: custom.estado_activo !== false
+        isActive: custom.estado_activo !== false,
+        isEnrollment: true,
       };
     });
 
@@ -36,56 +65,51 @@ export default function FormationPage({ enrollments = [], applications = [] }) {
       .map(app => {
         const c = app.candidate || {};
         const fullName = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Desconocido';
-        const doc = c.document_number || 'S/N';
-        
         return {
           id: app.id,
           candidate_id: c.id,
           status: app.status,
           fullName,
-          doc,
+          doc: c.document_number || 'S/N',
           ruta: 'Reemplazo',
           email: c.email || '',
           phone: c.phone || '',
           city: c.city || 'Desconocido',
-          isActive: c.is_active !== false
+          isActive: c.is_active !== false,
+          isEnrollment: false,
         };
       });
 
-    const enrolledCandidateIds = new Set(enrolledProfiles.map(p => p.candidate_id));
-    const uniqueReemplazos = reemplazoProfiles.filter(p => !enrolledCandidateIds.has(p.candidate_id));
-
-    return [...enrolledProfiles, ...uniqueReemplazos];
+    const enrolledIds = new Set(enrolledProfiles.map(p => p.candidate_id));
+    return [...enrolledProfiles, ...reemplazoProfiles.filter(p => !enrolledIds.has(p.candidate_id))];
   }, [enrollments, applications]);
 
-  const stats = useMemo(() => {
-    return {
-      total: profiles.length,
-      senior: profiles.filter(p => p.ruta === 'Senior').length,
-      junior: profiles.filter(p => p.ruta === 'Junior').length,
-      reemplazo: profiles.filter(p => p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo')).length,
-    };
-  }, [profiles]);
+  const stats = useMemo(() => ({
+    total: profiles.length,
+    senior: profiles.filter(p => p.ruta === 'Senior').length,
+    junior: profiles.filter(p => p.ruta === 'Junior').length,
+    reemplazo: profiles.filter(p => p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo')).length,
+  }), [profiles]);
 
   const filtered = useMemo(() => {
-    const list = profiles.filter(p => 
-      activeTab === 'Reemplazo' 
+    const list = profiles.filter(p =>
+      activeTab === 'Reemplazo'
         ? (p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo'))
         : p.ruta === activeTab
     );
     if (!search) return list;
-    
     const s = search.toLowerCase();
-    return list.filter(p => 
-      p.fullName.toLowerCase().includes(s) || 
-      String(p.doc).includes(s) || 
+    return list.filter(p =>
+      p.fullName.toLowerCase().includes(s) ||
+      String(p.doc).includes(s) ||
       p.email.toLowerCase().includes(s)
     );
   }, [profiles, activeTab, search]);
 
+  const tabColors = { Senior: 'var(--accent-teal)', Junior: 'var(--accent-violet)', Reemplazo: '#f59e0b' };
+
   return (
     <div className="animate-in">
-      {/* Header */}
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div className="page-header-left">
           <h1>Cohorte de Formación</h1>
@@ -116,39 +140,35 @@ export default function FormationPage({ enrollments = [], applications = [] }) {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* Navigation Tabs */}
-        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light)', gap: '24px' }}>
-          <button 
-            className={`nav-item ${activeTab === 'Senior' ? 'active' : ''}`}
-            onClick={() => setActiveTab('Senior')}
-            style={{ padding: '12px 16px', background: 'transparent', borderBottom: activeTab === 'Senior' ? '2px solid var(--accent-teal)' : 'none', borderRadius: 0, fontWeight: activeTab === 'Senior' ? '700' : '500', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            Ruta Senior <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>{stats.senior}</span>
-          </button>
-          
-          <button 
-            className={`nav-item ${activeTab === 'Junior' ? 'active' : ''}`}
-            onClick={() => setActiveTab('Junior')}
-            style={{ padding: '12px 16px', background: 'transparent', borderBottom: activeTab === 'Junior' ? '2px solid var(--accent-violet)' : 'none', borderRadius: 0, fontWeight: activeTab === 'Junior' ? '700' : '500', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            Ruta Junior <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>{stats.junior}</span>
-          </button>
 
-          <button 
-            className={`nav-item ${activeTab === 'Reemplazo' ? 'active' : ''}`}
-            onClick={() => setActiveTab('Reemplazo')}
-            style={{ padding: '12px 16px', background: 'transparent', borderBottom: activeTab === 'Reemplazo' ? '2px solid #f59e0b' : 'none', borderRadius: 0, fontWeight: activeTab === 'Reemplazo' ? '700' : '500', display: 'flex', alignItems: 'center', gap: '8px' }}
-          >
-            Lista de Reemplazo <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '11px' }}>{stats.reemplazo}</span>
-          </button>
+        {/* Tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light)', gap: '24px' }}>
+          {['Senior', 'Junior', 'Reemplazo'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="nav-item"
+              style={{
+                padding: '12px 16px', background: 'transparent',
+                borderBottom: activeTab === tab ? `2px solid ${tabColors[tab]}` : '2px solid transparent',
+                borderRadius: 0,
+                fontWeight: activeTab === tab ? 700 : 500,
+                display: 'flex', alignItems: 'center', gap: 8,
+                color: activeTab === tab ? '#f1f5f9' : '#64748b',
+              }}
+            >
+              {tab === 'Senior' ? 'Ruta Senior' : tab === 'Junior' ? 'Ruta Junior' : 'Lista de Reemplazo'}
+              <span style={{ background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>
+                {tab === 'Senior' ? stats.senior : tab === 'Junior' ? stats.junior : stats.reemplazo}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="filter-search" style={{ minWidth: '300px' }}>
+          <div className="filter-search" style={{ minWidth: 300 }}>
             <span className="filter-search-icon">🔍</span>
             <input
               type="text"
@@ -158,52 +178,62 @@ export default function FormationPage({ enrollments = [], applications = [] }) {
               style={{ width: '100%', padding: '10px 14px 10px 38px', background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }}
             />
           </div>
-          <button className="btn btn-secondary">
-            ⬇️ Descargar Listado {activeTab}
-          </button>
+          <span style={{ fontSize: 13, color: '#475569' }}>{filtered.length} participantes</span>
         </div>
 
-        {/* Table layout copied from index.css standards */}
+        {/* Table */}
         <div className="table-container" style={{ background: 'var(--bg-primary)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
           <table className="data-table" style={{ width: '100%', borderSpacing: '12px 6px' }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left', padding: '14px 16px', background: 'rgba(148, 163, 184, 0.08)' }}>Participante</th>
-                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148, 163, 184, 0.08)' }}>Documento</th>
-                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148, 163, 184, 0.08)' }}>Contacto</th>
-                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148, 163, 184, 0.08)' }}>Municipio</th>
-                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148, 163, 184, 0.08)' }}>Estado</th>
+                <th style={{ textAlign: 'left', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Participante</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Documento</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Contacto</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Municipio</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Progreso</th>
+                <th style={{ textAlign: 'center', padding: '14px 16px', background: 'rgba(148,163,184,0.08)' }}>Estado</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
-                <tr key={p.id}>
-                  <td style={{ background: 'rgba(148, 163, 184, 0.04)', padding: '16px', textAlign: 'left', borderRadius: '4px' }}>
-                    <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{p.fullName}</div>
-                  </td>
-                  <td style={{ background: 'rgba(148, 163, 184, 0.04)', padding: '16px', textAlign: 'center', borderRadius: '4px' }}>
-                    {p.doc}
-                  </td>
-                  <td style={{ background: 'rgba(148, 163, 184, 0.04)', padding: '16px', textAlign: 'center', borderRadius: '4px' }}>
-                    <div style={{ color: 'var(--text-primary)' }}>{p.phone || 'S/N'}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{p.email}</div>
-                  </td>
-                  <td style={{ background: 'rgba(148, 163, 184, 0.04)', padding: '16px', textAlign: 'center', borderRadius: '4px' }}>
-                    {p.city}
-                  </td>
-                  <td style={{ background: 'rgba(148, 163, 184, 0.04)', padding: '16px', textAlign: 'center', borderRadius: '4px' }}>
-                    {p.isActive ? (
-                      <span className="badge badge-approved" style={{ background: 'var(--accent-emerald-dim)', color: 'var(--accent-emerald)' }}>Activo</span>
-                    ) : (
-                      <span className="badge badge-rejected" style={{ background: 'var(--accent-rose-dim)', color: 'var(--accent-rose)' }}>Inactivo</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              
+              {filtered.map(p => {
+                const cp = progressByCandidateId[p.candidate_id];
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => setSelectedProfile(p)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'left', borderRadius: 4 }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.fullName}</div>
+                    </td>
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'center', borderRadius: 4 }}>
+                      {p.doc}
+                    </td>
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'center', borderRadius: 4 }}>
+                      <div style={{ color: 'var(--text-primary)' }}>{p.phone || 'S/N'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.email}</div>
+                    </td>
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'center', borderRadius: 4 }}>
+                      {p.city}
+                    </td>
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'center', borderRadius: 4 }}>
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <MiniProgressBar pct={cp?.avgProgress ?? null} />
+                      </div>
+                    </td>
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '16px', textAlign: 'center', borderRadius: 4 }}>
+                      {p.isActive
+                        ? <span className="badge badge-approved" style={{ background: 'var(--accent-emerald-dim)', color: 'var(--accent-emerald)' }}>Activo</span>
+                        : <span className="badge badge-rejected" style={{ background: 'var(--accent-rose-dim)', color: 'var(--accent-rose)' }}>Inactivo</span>
+                      }
+                    </td>
+                  </tr>
+                );
+              })}
+
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
                     No hay participantes encontrados.
                   </td>
                 </tr>
@@ -213,6 +243,18 @@ export default function FormationPage({ enrollments = [], applications = [] }) {
         </div>
       </div>
 
+      {/* Modal */}
+      {selectedProfile && (
+        <ParticipantDetailModal
+          profile={selectedProfile}
+          courseProgress={progressByCandidateId[selectedProfile.candidate_id]}
+          onClose={() => setSelectedProfile(null)}
+          onSave={selectedProfile.isEnrollment && updateEnrollment
+            ? async (id, updates) => { await updateEnrollment(id, updates); setSelectedProfile(null); }
+            : null
+          }
+        />
+      )}
     </div>
   );
 }
