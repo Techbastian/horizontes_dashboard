@@ -84,12 +84,16 @@ export default function FormationPage({ enrollments = [], applications = [], for
     return [...enrolledProfiles, ...reemplazoProfiles.filter(p => !enrolledIds.has(p.candidate_id))];
   }, [enrollments, applications]);
 
-  const stats = useMemo(() => ({
-    total: profiles.length,
-    senior: profiles.filter(p => p.ruta === 'Senior').length,
-    junior: profiles.filter(p => p.ruta === 'Junior').length,
-    reemplazo: profiles.filter(p => p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo')).length,
-  }), [profiles]);
+  const stats = useMemo(() => {
+    const activos = profiles.filter(p => p.isActive);
+    return {
+      total:     activos.length,
+      senior:    activos.filter(p => p.ruta === 'Senior').length,
+      junior:    activos.filter(p => p.ruta === 'Junior').length,
+      reemplazo: activos.filter(p => p.ruta === 'Reemplazo' || p.ruta.toLowerCase().includes('respaldo')).length,
+      inactivos: profiles.filter(p => !p.isActive).length,
+    };
+  }, [profiles]);
 
   const filtered = useMemo(() => {
     const list = profiles.filter(p =>
@@ -113,15 +117,16 @@ export default function FormationPage({ enrollments = [], applications = [], for
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div className="page-header-left">
           <h1>Cohorte de Formación</h1>
-          <p>Gestión de los {stats.total} participantes matriculados en el programa técnico.</p>
+          <p>{stats.total} participantes activos · {stats.inactivos} retirados del programa.</p>
         </div>
       </div>
 
       {/* KPI Stats */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '32px' }}>
         <div className="kpi-card" style={{ animationDelay: '0s' }}>
-          <div className="kpi-label"><span className="kpi-label-icon">🎓</span>Total Matriculados</div>
+          <div className="kpi-label"><span className="kpi-label-icon">🎓</span>Total Activos</div>
           <div className="kpi-value">{stats.total}</div>
+          <div className="kpi-change neutral">{stats.inactivos} retirados</div>
         </div>
         <div className="kpi-card" style={{ animationDelay: '0.1s' }}>
           <div className="kpi-label"><span className="kpi-label-icon">⭐</span>Ruta Senior</div>
