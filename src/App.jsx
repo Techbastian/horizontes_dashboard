@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import CandidatesPage from './pages/CandidatesPage';
 import FormationPage from './pages/FormationPage';
+import EventsPage from './pages/EventsPage';
 
 function LoadingScreen() {
   return (
@@ -69,6 +70,10 @@ export default function App() {
                 updateEnrollment={updateEnrollment}
               />
             }
+          />
+          <Route
+            path="/eventos"
+            element={<EventsPage cohort={cohort} />}
           />
         </Route>
       </Routes>

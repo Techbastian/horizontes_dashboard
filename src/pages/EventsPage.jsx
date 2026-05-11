@@ -1,0 +1,354 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { supabase } from '../lib/supabase';
+import {
+  monthRangeUtcIso,
+  overlapsBogotaDay,
+  formatBogotaRange,
+  isoToBogotaTime,
+  isoToBogotaDate,
+} from '../lib/bogotaTime';
+import EventEditorModal from '../components/EventEditorModal';
+
+function pad(n) {
+  return String(n).padStart(2, '0');
+}
+
+function dateKeyFromParts(y, monthIndex, dom) {
+  return `${y}-${pad(monthIndex + 1)}-${pad(dom)}`;
+}
+
+function buildCalendarCells(viewYear, viewMonth0) {
+  const first = new Date(viewYear, viewMonth0, 1);
+  const last = new Date(viewYear, viewMonth0 + 1, 0);
+  const padStart = (first.getDay() + 6) % 7;
+
+  const cells = [];
+  for (let i = 0; i < padStart; i++) {
+    const d = new Date(viewYear, viewMonth0, -padStart + 1 + i);
+    cells.push({
+      dateKey: dateKeyFromParts(d.getFullYear(), d.getMonth(), d.getDate()),
+      inMonth: false,
+      dom: d.getDate(),
+    });
+  }
+  for (let dom = 1; dom <= last.getDate(); dom++) {
+    cells.push({
+      dateKey: dateKeyFromParts(viewYear, viewMonth0, dom),
+      inMonth: true,
+      dom,
+    });
+  }
+  while (cells.length % 7 !== 0) {
+    const lastCell = cells[cells.length - 1];
+    const [y2, m2, d2] = lastCell.dateKey.split('-').map(Number);
+    const nx = new Date(y2, m2 - 1, d2 + 1);
+    cells.push({
+      dateKey: dateKeyFromParts(nx.getFullYear(), nx.getMonth(), nx.getDate()),
+      inMonth: false,
+      dom: nx.getDate(),
+    });
+  }
+  return cells;
+}
+
+const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+export default function EventsPage({ cohort }) {
+  const cohortId = cohort?.id;
+
+  const [cursor, setCursor] = useState(() => new Date());
+  const viewYear = cursor.getFullYear();
+  const viewMonth0 = cursor.getMonth();
+
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const [selectedDayKey, setSelectedDayKey] = useState(null);
+
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState(null);
+
+  const calendarCells = useMemo(
+    () => buildCalendarCells(viewYear, viewMonth0),
+    [viewYear, viewMonth0]
+  );
+
+  const loadEvents = useCallback(async () => {
+    if (!cohortId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { start, end } = monthRangeUtcIso(viewYear, viewMonth0);
+      const { data, error: err } = await supabase
+        .from('eventos')
+        .select('*')
+        .eq('cohort_id', cohortId)
+        .gte('fecha_hora_fin', start)
+        .lte('fecha_hora_inicio', end)
+        .order('fecha_hora_inicio', { ascending: true });
+
+      if (err) throw err;
+      setEvents(data || []);
+    } catch (e) {
+      setError(e.message || 'No se pudieron cargar los eventos.');
+      setEvents([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [cohortId, viewYear, viewMonth0]);
+
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
+  const todayKey = isoToBogotaDate(new Date().toISOString());
+
+  const eventCountByDay = useMemo(() => {
+    const uniq = [...new Set(calendarCells.map((c) => c.dateKey))];
+    const map = {};
+    for (const dk of uniq) {
+      map[dk] = events.filter((ev) =>
+        overlapsBogotaDay(ev.fecha_hora_inicio, ev.fecha_hora_fin, dk)
+      ).length;
+    }
+    return map;
+  }, [calendarCells, events]);
+
+  const eventsForSelectedDay = useMemo(() => {
+    if (!selectedDayKey) return [];
+    return events
+      .filter((ev) => overlapsBogotaDay(ev.fecha_hora_inicio, ev.fecha_hora_fin, selectedDayKey))
+      .sort((a, b) => new Date(a.fecha_hora_inicio) - new Date(b.fecha_hora_inicio));
+  }, [events, selectedDayKey]);
+
+  const monthTitle = cursor.toLocaleString('es-CO', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/Bogota',
+  });
+
+  if (!cohortId) {
+    return (
+      <div className="animate-in">
+        <div className="page-header">
+          <h1>Eventos</h1>
+          <p>No hay cohorte activa para asociar eventos.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-in">
+      <div className="page-header">
+        <div className="page-header-left">
+          <h1>Eventos</h1>
+          <p>
+            Calendario operativo por cohorte. Pulsa un día para ver, crear, editar o eliminar
+            eventos (zona America/Bogota).
+          </p>
+        </div>
+      </div>
+
+      <div className="events-calendar-wrap">
+        <div className="events-calendar-toolbar">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              setCursor(new Date(viewYear, viewMonth0 - 1, 1))
+            }
+            aria-label="Mes anterior"
+          >
+            ‹
+          </button>
+          <h2 className="events-calendar-month-title">{monthTitle}</h2>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() =>
+              setCursor(new Date(viewYear, viewMonth0 + 1, 1))
+            }
+            aria-label="Mes siguiente"
+          >
+            ›
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary events-calendar-today-btn"
+            onClick={() => setCursor(new Date())}
+          >
+            Hoy
+          </button>
+        </div>
+
+        {error && (
+          <div className="error-message" style={{ marginBottom: 16 }}>
+            {error}{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => loadEvents()}>
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        <div className={`events-calendar ${loading ? 'events-calendar-loading' : ''}`}>
+          {WEEKDAY_LABELS.map((w) => (
+            <div key={w} className="events-calendar-weekday">
+              {w}
+            </div>
+          ))}
+          {calendarCells.map((cell) => (
+            <button
+              key={`${cell.dateKey}-${cell.inMonth}-${cell.dom}`}
+              type="button"
+              className={`events-calendar-day${cell.inMonth ? '' : ' events-calendar-day-muted'}${
+                cell.dateKey === todayKey ? ' events-calendar-day-today' : ''
+              }`}
+              onClick={() => setSelectedDayKey(cell.dateKey)}
+            >
+              <span className="events-calendar-dom">{cell.dom}</span>
+              {(eventCountByDay[cell.dateKey] || 0) > 0 && (
+                <span className="events-calendar-dots">
+                  {Array.from({
+                    length: Math.min(eventCountByDay[cell.dateKey] || 0, 3),
+                  }).map((_, i) => (
+                    <span key={i} className="events-calendar-dot" />
+                  ))}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedDayKey && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 1050 }}
+          role="presentation"
+          onClick={() => {
+            setSelectedDayKey(null);
+          }}
+        >
+          <div
+            className="modal-content events-day-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="events-day-modal-title"
+          >
+            <div className="modal-header">
+              <div className="modal-header-info">
+                <div className="modal-avatar">📅</div>
+                <div>
+                  <div id="events-day-modal-title" className="modal-name">
+                    {new Date(`${selectedDayKey}T12:00:00-05:00`).toLocaleDateString('es-CO', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                      timeZone: 'America/Bogota',
+                    })}
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {eventsForSelectedDay.length} evento
+                    {eventsForSelectedDay.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setSelectedDayKey(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body events-day-modal-body">
+              <div className="events-day-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setEditingEvent(null);
+                    setEditorOpen(true);
+                  }}
+                >
+                  + Nuevo evento
+                </button>
+              </div>
+
+              {eventsForSelectedDay.length === 0 ? (
+                <p className="events-day-empty">
+                  No hay eventos este día. Crea uno con el botón anterior.
+                </p>
+              ) : (
+                <ul className="events-day-list">
+                  {eventsForSelectedDay.map((ev) => (
+                    <li key={ev.id}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="events-day-item"
+                        onClick={() => {
+                          setEditingEvent(ev);
+                          setEditorOpen(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setEditingEvent(ev);
+                            setEditorOpen(true);
+                          }
+                        }}
+                      >
+                        <span className="events-day-item-title">{ev.nombre}</span>
+                        <span className="events-day-item-meta">
+                          {isoToBogotaDate(ev.fecha_hora_inicio) ===
+                          isoToBogotaDate(ev.fecha_hora_fin)
+                            ? `${isoToBogotaTime(ev.fecha_hora_inicio)} – ${isoToBogotaTime(ev.fecha_hora_fin)}`
+                            : formatBogotaRange(ev.fecha_hora_inicio, ev.fecha_hora_fin)}
+                        </span>
+                        {ev.descripcion && (
+                          <span className="events-day-item-desc">{ev.descripcion}</span>
+                        )}
+                        {ev.evidencia_url && (
+                          <button
+                            type="button"
+                            className="events-day-item-evidence"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(ev.evidencia_url, '_blank', 'noopener,noreferrer');
+                            }}
+                          >
+                            Abrir evidencia
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editorOpen && (
+        <EventEditorModal
+          cohortId={cohortId}
+          selectedDateKey={selectedDayKey}
+          event={editingEvent}
+          onClose={() => {
+            setEditorOpen(false);
+            setEditingEvent(null);
+          }}
+          onSaved={() => loadEvents()}
+          onDeleted={() => loadEvents()}
+        />
+      )}
+    </div>
+  );
+}

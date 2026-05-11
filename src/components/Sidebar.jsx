@@ -55,6 +55,15 @@ export default function Sidebar({ isOpen, onClose }) {
             Formación
           </NavLink>
 
+          <NavLink
+            to="/eventos"
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
+          >
+            <span className="nav-item-icon">📆</span>
+            Eventos
+          </NavLink>
+
           <div className="nav-item disabled">
             <span className="nav-item-icon">⚙️</span>
             Configuración
