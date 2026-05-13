@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
-const EXCEL_PATH = resolve(__dirname, '../Reportes formacion/estado_detallado_estudiantes_07mayo.xlsx');
+const EXCEL_PATH = resolve(__dirname, '../Reportes formacion/estado_detallado_estudiantes_12mayo.xlsx');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
