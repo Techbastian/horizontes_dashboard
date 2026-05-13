@@ -1,14 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
 import XLSX from 'xlsx';
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
+import { readFileSync, readdirSync, statSync } from 'fs';
+import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
-const EXCEL_PATH = resolve(__dirname, '../Reportes formacion/estado_detallado_estudiantes_12mayo.xlsx');
+
+const REPORTES_DIR = resolve(__dirname, '../Reportes formacion');
+
+function getLatestExcel() {
+  const files = readdirSync(REPORTES_DIR)
+    .filter(f => extname(f).toLowerCase() === '.xlsx')
+    .map(f => ({ name: f, mtime: statSync(resolve(REPORTES_DIR, f)).mtime }))
+    .sort((a, b) => b.mtime - a.mtime);
+
+  if (!files.length) throw new Error('No hay archivos .xlsx en Reportes formacion/');
+  console.log(`📄 Usando reporte: ${files[0].name}`);
+  return resolve(REPORTES_DIR, files[0].name);
+}
+
+const EXCEL_PATH = getLatestExcel();
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
