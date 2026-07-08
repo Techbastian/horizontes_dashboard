@@ -109,6 +109,8 @@ function parseMatriz(wb) {
       ruta_definitiva_matriz: (r['Ruta definitiva'] || '').trim(),
       clasificacion: (r['Clasificación Final'] || '').trim(),
       cambio_nivel_texto: (r['Cambio de Nivel durante la Nivelación'] || '').trim(),
+      motivo_cafe_1: (r['Motivo de no asistencia al 1er Café'] || '').trim() || null,
+      motivo_cafe_2: (r['Motivo de no asistencia al 2er Café'] || '').trim() || null,
       elegible_ascenso: (r['Elegible para Ascenso a Senior'] || '').trim(),
       reasignada_senior: r['Reasignadas a ruta Senior'] === true,
       completitud: r['Porcentaje de Completitud en Nivelación'],
@@ -221,10 +223,12 @@ async function main() {
     }
 
     // Filas de asistencia
+    // Motivos de inasistencia a cafés vienen de la Matriz Maestra (Café 1 y Café 2)
+    const cafeMotivos = { 1: m?.motivo_cafe_1 || null, 2: m?.motivo_cafe_2 || null };
     const push = (tipo, arr) => arr.forEach((a, i) => plan.attendanceRows.push({
       cohort_id: cohortId, candidate_id: candidateId, grupo: p.grupo,
       tipo, actividad: a.actividad, fecha: a.fecha, orden: i + 1, asistio: a.asistio,
-      observacion: tipo === 'sesion' ? p.observacion : null,
+      observacion: tipo === 'sesion' ? p.observacion : (tipo === 'cafe' ? (cafeMotivos[i + 1] || null) : null),
     }));
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
   }

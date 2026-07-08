@@ -216,12 +216,24 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                     </div>
                   );
                 })()}
-                {attendance.cafes?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes == null ? '—' : `${profile.pondCafes}%`})</span></div>
-                    <AttendanceDots items={attendance.cafes} labelPrefix="C" />
-                  </div>
-                )}
+                {attendance.cafes?.length > 0 && (() => {
+                  const motivos = attendance.cafes.filter(c => c.observacion);
+                  return (
+                    <div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes == null ? '—' : `${profile.pondCafes}%`})</span></div>
+                      <AttendanceDots items={attendance.cafes} labelPrefix="C" />
+                      {motivos.length > 0 && (
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {motivos.map((c, i) => (
+                            <div key={i} style={{ fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
+                              📝 {c.actividad} — motivo de inasistencia: <span style={{ color: '#cbd5e1', whiteSpace: 'pre-wrap' }}>{c.observacion}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {attendance.entregables?.length > 0 && (
                   <div>
                     <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Entregables <span style={{ color: '#64748b' }}>({profile.pondEntregables == null ? '—' : `${profile.pondEntregables}%`})</span></div>
