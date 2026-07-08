@@ -111,6 +111,39 @@ export default function DashboardPage({ metrics, applications, formationProgress
         />
       </div>
 
+      {/* Movimientos en el proceso formativo */}
+      {metrics.transiciones && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">Movimientos en el Proceso Formativo</div>
+              <div className="card-subtitle">Cambios de nivel e inactivaciones a lo largo de la nivelación</div>
+            </div>
+            <button className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => navigate('/formacion')}>
+              Ver detalle →
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 12 }}>
+            {[
+              { icon: '🔼', label: 'Ascendieron a Senior', sub: 'Junior → Senior', value: metrics.transiciones.ascensos, color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)' },
+              { icon: '🔽', label: 'Descendieron a Junior', sub: 'Senior → Junior', value: metrics.transiciones.descensos, color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)' },
+              { icon: '⚡', label: 'Estrategia de Activación', sub: 'Ingresaron por activación', value: metrics.transiciones.activacion, color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', bd: 'rgba(245,158,11,0.18)' },
+              { icon: '✖', label: 'Pasaron a Inactivos', sub: inactivosSubtitle(metrics.transiciones.inactivosPorGrupo), value: metrics.transiciones.inactivos, color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)' },
+            ].map((c, i) => (
+              <div key={i} onClick={() => navigate('/formacion')}
+                style={{ background: c.bg, border: `1px solid ${c.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{c.label}</div>
+                  <span style={{ fontSize: 20, opacity: 0.5 }}>{c.icon}</span>
+                </div>
+                <div style={{ fontSize: 42, fontWeight: 900, color: c.color, lineHeight: 1.1, marginTop: 6 }}>{c.value}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Middle Row: Funnel (replaces Donut) + Top Candidates */}
       <div className="dashboard-grid">
         {/* Funnel + Trend chart */}
@@ -450,6 +483,14 @@ export default function DashboardPage({ metrics, applications, formationProgress
 
 function filterNonZero(obj) {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v > 0));
+}
+
+function inactivosSubtitle(porGrupo = {}) {
+  const parts = Object.entries(porGrupo)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([g, v]) => `${v} ${g}`);
+  return parts.length ? parts.join(' · ') : 'Se retiraron del programa';
 }
 
 function AgeDonutCard({ title, subtitle, data, colors }) {

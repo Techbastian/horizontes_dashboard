@@ -18,10 +18,35 @@ function ProgressBar({ pct }) {
   );
 }
 
-const RUTAS = ['Senior', 'Junior', 'Reemplazo'];
+const RUTAS = ['Senior', 'Junior', 'Activación'];
 
-export default function ParticipantDetailModal({ profile, courseProgress, onClose, onSave }) {
-  const [ruta, setRuta] = useState(profile.ruta === 'Reemplazo' ? 'Reemplazo' : profile.ruta);
+// Semáforo de asistencia por actividad
+function AttendanceDots({ items, labelPrefix }) {
+  if (!items || !items.length) return null;
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {items.map((it, i) => {
+        const attended = it.asistio === true;
+        const missed = it.asistio === false;
+        const bg = attended ? '#10b98122' : missed ? '#ef444422' : '#1e293b';
+        const color = attended ? '#10b981' : missed ? '#ef4444' : '#475569';
+        const short = it.actividad.replace(/Sesi[oó]n\s*/i, 'S').replace(/Caf[eé]\s*/i, 'C').replace(/Entregable\s*/i, 'E').replace(/\s+/g, ' ').trim();
+        return (
+          <div key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${attended ? 'Asistió' : missed ? 'No asistió' : 'Sin registro'}`}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
+              {attended ? '✓' : missed ? '✗' : '·'}
+            </div>
+            <span style={{ fontSize: 9, color: '#64748b' }}>{short || `${labelPrefix}${i + 1}`}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function ParticipantDetailModal({ profile, courseProgress, attendance, onClose, onSave }) {
+  const [ruta, setRuta] = useState(RUTAS.includes(profile.ruta) ? profile.ruta : 'Junior');
   const [isActive, setIsActive] = useState(profile.isActive);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -101,6 +126,73 @@ export default function ParticipantDetailModal({ profile, courseProgress, onClos
               ))}
             </div>
           </div>
+
+          {/* Historial / transición */}
+          {(profile.historia || profile.cambioNivel || profile.rutaInicial) && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                Historial en el programa
+              </div>
+              <div style={{ background: '#1a2035', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {profile.rutaInicial && (
+                    <>
+                      <span style={{ fontSize: 12, color: '#94a3b8' }}>Ruta inicial: <b style={{ color: '#f1f5f9' }}>{profile.rutaInicial}</b></span>
+                      <span style={{ color: '#475569' }}>→</span>
+                    </>
+                  )}
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>Ruta actual: <b style={{ color: '#f1f5f9' }}>{profile.ruta}</b></span>
+                  <span style={{
+                    marginLeft: 'auto', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99,
+                    background: profile.isActive ? '#10b98122' : '#ef444422', color: profile.isActive ? '#10b981' : '#ef4444',
+                  }}>{profile.isActive ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                {profile.historia && <div style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.5 }}>{profile.historia}</div>}
+                {profile.motivoCambio && profile.motivoCambio !== 'Sin cambio de nivel' && (
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Motivo: {profile.motivoCambio}</div>
+                )}
+                {profile.completitud != null && (
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Completitud en nivelación: <b style={{ color: '#94a3b8' }}>{profile.completitud}%</b></div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Asistencia sesión por sesión */}
+          {attendance && (attendance.sesiones?.length || attendance.cafes?.length || attendance.entregables?.length) ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                  Asistencia detallada
+                </div>
+                {profile.totalPonderado != null && (
+                  <div style={{ fontSize: 20, fontWeight: 800, color: progressColor(profile.totalPonderado) }}>
+                    {profile.totalPonderado}% <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>total ponderado</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {attendance.sesiones?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Sesiones <span style={{ color: '#64748b' }}>({profile.pondSesiones ?? 0}%)</span></div>
+                    <AttendanceDots items={attendance.sesiones} labelPrefix="S" />
+                  </div>
+                )}
+                {attendance.cafes?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes ?? 0}%)</span></div>
+                    <AttendanceDots items={attendance.cafes} labelPrefix="C" />
+                  </div>
+                )}
+                {attendance.entregables?.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Entregables <span style={{ color: '#64748b' }}>({profile.pondEntregables ?? 0}%)</span></div>
+                    <AttendanceDots items={attendance.entregables} labelPrefix="E" />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {/* Progreso de formación */}
           {routes.length > 0 && (

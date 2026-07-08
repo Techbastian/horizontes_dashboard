@@ -8,6 +8,14 @@ function getScoreColor(score, max) {
   return '#f43f5e';
 }
 
+// Nivel en el que fue seleccionada la persona (según su enrollment)
+function getNivelInfo(ruta) {
+  if (ruta === 'Senior') return { label: 'Senior', color: '#0d9488', bg: '#0d948820' };
+  if (ruta === 'Junior') return { label: 'Junior', color: '#7c3aed', bg: '#7c3aed20' };
+  if (ruta === 'Activación') return { label: 'Junior (Activación)', color: '#f59e0b', bg: '#f59e0b20' };
+  return null;
+}
+
 function getGrupoBadgeClass(grupo) {
   const g = (grupo || '').toLowerCase();
   if (g === 'senior') return 'badge-senior';
@@ -28,6 +36,7 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
   const [filterFase3, setFilterFase3] = useState(false);
   const [filterCuidador, setFilterCuidador] = useState(false);
   const [filterEnrolled, setFilterEnrolled] = useState('');
+  const [filterNivel, setFilterNivel] = useState('');
   const [sortField, setSortField] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [page, setPage] = useState(1);
@@ -41,6 +50,7 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
       if (location.state.requireFase3 !== undefined) setFilterFase3(location.state.requireFase3);
       if (location.state.filterCuidador !== undefined) setFilterCuidador(location.state.filterCuidador);
       if (location.state.filterEnrolled !== undefined) setFilterEnrolled(location.state.filterEnrolled);
+      if (location.state.filterNivel !== undefined) setFilterNivel(location.state.filterNivel);
       setPage(1);
     }
   }, [location.state]);
@@ -53,6 +63,7 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
     setFilterFase3(false);
     setFilterCuidador(false);
     setFilterEnrolled('');
+    setFilterNivel('');
     setPage(1);
     navigate(location.pathname, { replace: true, state: {} });
   };
@@ -66,11 +77,19 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
       grupos.add(fases.grupo_asignado || 'Sin asignar');
     });
 
+    const niveles = new Set();
+    (enrollments || []).forEach(e => {
+      const r = e.custom_form_data?.ruta_asignada;
+      if (r) niveles.add(r);
+    });
+    // Orden preferido: Senior, Junior, Activación
+    const nivelOrder = { Senior: 0, Junior: 1, 'Activación': 2 };
     return {
       grupos: [...grupos].sort(),
-      elegibilidades: ['Elegible', 'No elegible']
+      elegibilidades: ['Elegible', 'No elegible'],
+      niveles: [...niveles].sort((a, b) => (nivelOrder[a] ?? 9) - (nivelOrder[b] ?? 9)),
     };
-  }, [applications]);
+  }, [applications, enrollments]);
 
   // Enriched data
   const enriched = useMemo(() => {
@@ -80,6 +99,12 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
         .map(e => e.candidate?.id)
         .filter(Boolean)
     );
+
+    // Mapa candidate_id → custom_form_data del enrollment (para el nivel de selección)
+    const enrollmentMap = new Map();
+    (enrollments || []).forEach(e => {
+      if (e.candidate?.id) enrollmentMap.set(e.candidate.id, e.custom_form_data || {});
+    });
 
     return applications.map(app => {
       const ca = app.custom_answers || {};
@@ -107,6 +132,10 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
         email: app.candidate?.email || '',
         esCuidador: ca.es_cuidador === true,
         isFinalSelected: enrolledSet.has(app.candidate?.id),
+        nivelSeleccion: enrollmentMap.get(app.candidate?.id)?.ruta_asignada || null,
+        nivelActivo: enrollmentMap.has(app.candidate?.id)
+          ? enrollmentMap.get(app.candidate?.id)?.estado_activo !== false
+          : false,
       };
     });
   }, [applications, enrollments]);
@@ -131,6 +160,7 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
     if (filterCuidador) result = result.filter(a => a.esCuidador);
     if (filterEnrolled === 'yes') result = result.filter(a => a.isFinalSelected);
     if (filterEnrolled === 'no') result = result.filter(a => !a.isFinalSelected);
+    if (filterNivel) result = result.filter(a => a.nivelSeleccion === filterNivel);
 
     // Sort
     result.sort((a, b) => {
@@ -153,7 +183,7 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
     });
 
     return result;
-  }, [enriched, search, filterGrupo, filterElegibilidad, filterFase2, filterFase3, filterCuidador, filterEnrolled, sortField, sortDir]);
+  }, [enriched, search, filterGrupo, filterElegibilidad, filterFase2, filterFase3, filterCuidador, filterEnrolled, filterNivel, sortField, sortDir]);
 
   // Pagination
   const totalPages = Math.ceil(filtered.length / pageSize);
@@ -248,6 +278,10 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
           <option value="">Fase 4: Asignación Final (Todos)</option>
           {filterOptions.grupos.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
+        <select className="filter-select" value={filterNivel} onChange={e => { setFilterNivel(e.target.value); setPage(1); }}>
+          <option value="">Nivel de Selección (Todos)</option>
+          {filterOptions.niveles.map(n => <option key={n} value={n}>{getNivelInfo(n)?.label || n}</option>)}
+        </select>
         
         {/* Ad hoc filter indicators */}
         {(filterFase2 || filterFase3 || filterCuidador || filterEnrolled) && (
@@ -289,8 +323,8 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
               <th className={sortField === 'grupo' ? 'sorted' : ''} onClick={() => handleSort('grupo')} style={{ width: '17%' }}>
                 Fase 4: Asignación <SortIcon field="grupo" />
               </th>
-              <th style={{ width: '13%', textAlign: 'center' }}>
-                Selección Final
+              <th style={{ width: '15%', textAlign: 'center' }}>
+                Nivel de Selección
               </th>
             </tr>
           </thead>
@@ -336,10 +370,16 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
                   {renderAssignment(app)}
                 </td>
                 <td style={{ textAlign: 'center' }}>
-                  {app.isFinalSelected
-                    ? <span className="badge" style={{ backgroundColor: '#0d948820', color: '#0d9488', fontWeight: 700 }}>⭐ Inscrito</span>
-                    : <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>—</span>
-                  }
+                  {(() => {
+                    const info = getNivelInfo(app.nivelSeleccion);
+                    if (!info) return <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>—</span>;
+                    return (
+                      <div style={{ textAlign: 'center' }}>
+                        <span className="badge" style={{ backgroundColor: info.bg, color: info.color, fontWeight: 700, opacity: app.nivelActivo ? 1 : 0.6 }}>{info.label}</span>
+                        {!app.nivelActivo && <div style={{ fontSize: '10px', color: '#f43f5e', marginTop: 3, fontWeight: 600 }}>Inactivo</div>}
+                      </div>
+                    );
+                  })()}
                 </td>
               </tr>
             ))}

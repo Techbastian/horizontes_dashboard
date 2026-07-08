@@ -11,6 +11,7 @@ export function useApplicationsData() {
   const [socioData, setSocioData] = useState([]);
   const [courseStatus, setCourseStatus] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
+  const [sessionAttendance, setSessionAttendance] = useState([]);
 
   const fetchData = async () => {
     try {
@@ -126,6 +127,24 @@ export function useApplicationsData() {
           .in('id', courseIds);
         setCoursesList(crsRaw || []);
       }
+
+      // 6. Get session attendance (asistencia sesión por sesión) — paginado (>1000 filas)
+      let allAttendance = [];
+      let saPage = 0;
+      let saHasMore = true;
+      while (saHasMore) {
+        const { data: saRaw, error: saErr } = await supabase
+          .from('session_attendance')
+          .select('candidate_id, grupo, tipo, actividad, fecha, orden, asistio, observacion')
+          .eq('cohort_id', coh.id)
+          .range(saPage * pageSize, (saPage + 1) * pageSize - 1);
+        if (saErr) { console.warn('Could not fetch session_attendance:', saErr.message); break; }
+        if (saRaw && saRaw.length > 0) {
+          allAttendance = [...allAttendance, ...saRaw];
+          if (saRaw.length < pageSize) saHasMore = false; else saPage++;
+        } else saHasMore = false;
+      }
+      setSessionAttendance(allAttendance);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message || 'Error al cargar datos');
@@ -210,6 +229,42 @@ export function useApplicationsData() {
 
     return { participants, active, inactive, globalAvg, distribution };
   }, [courseStatus, coursesList, enrollments]);
+
+  // Asistencia por candidato: { candidate_id: { grupo, sesiones:[], cafes:[], entregables:[] } }
+  const attendanceByCandidate = useMemo(() => {
+    const map = {};
+    sessionAttendance.forEach(r => {
+      if (!map[r.candidate_id]) map[r.candidate_id] = { grupo: r.grupo, sesiones: [], cafes: [], entregables: [] };
+      const bucket = r.tipo === 'sesion' ? 'sesiones' : r.tipo === 'cafe' ? 'cafes' : 'entregables';
+      map[r.candidate_id][bucket].push(r);
+    });
+    Object.values(map).forEach(g => {
+      ['sesiones', 'cafes', 'entregables'].forEach(k => g[k].sort((a, b) => (a.orden || 0) - (b.orden || 0)));
+    });
+    return map;
+  }, [sessionAttendance]);
+
+  // Asistencia agregada por grupo y por sesión (para gráficos de avance)
+  const groupAttendance = useMemo(() => {
+    const groups = {};
+    sessionAttendance.forEach(r => {
+      if (r.tipo !== 'sesion') return;
+      if (!groups[r.grupo]) groups[r.grupo] = {};
+      const key = r.actividad;
+      if (!groups[r.grupo][key]) groups[r.grupo][key] = { actividad: r.actividad, fecha: r.fecha, orden: r.orden, asistieron: 0, total: 0 };
+      if (r.asistio !== null) {
+        groups[r.grupo][key].total++;
+        if (r.asistio) groups[r.grupo][key].asistieron++;
+      }
+    });
+    const out = {};
+    Object.entries(groups).forEach(([grupo, sesiones]) => {
+      out[grupo] = Object.values(sesiones)
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        .map(s => ({ ...s, pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0 }));
+    });
+    return out;
+  }, [sessionAttendance]);
 
   // Computed metrics
   const metrics = useMemo(() => {
@@ -404,8 +459,27 @@ export function useApplicationsData() {
       else if (isFemale) enrolledAgeDistribWomen[range]++;
     });
 
+    // Transiciones a lo largo del proceso formativo (desde enrollments)
+    const transiciones = { ascensos: 0, descensos: 0, activacion: 0, inactivos: 0, cambiaronNivel: 0, inactivosPorGrupo: {} };
+    enrollments.forEach(e => {
+      const cf = e.custom_form_data || {};
+      const activo = cf.estado_activo !== false && e.status !== 'inactive';
+      const cambio = cf.cambio_nivel || '';
+      const ruta = cf.ruta_asignada || 'Sin asignar';
+      if (!activo) {
+        transiciones.inactivos++;
+        transiciones.inactivosPorGrupo[ruta] = (transiciones.inactivosPorGrupo[ruta] || 0) + 1;
+      } else {
+        if (/Ascendió/i.test(cambio)) transiciones.ascensos++;
+        else if (/Descendió/i.test(cambio)) transiciones.descensos++;
+        if (/activación/i.test(cambio)) transiciones.activacion++;
+      }
+    });
+    transiciones.cambiaronNivel = transiciones.ascensos + transiciones.descensos;
+
     return {
       total,
+      transiciones,
       elegibles: elegibles.length,
       noElegibles: noElegibles.length,
       evaluados: evaluados.length,
@@ -467,7 +541,7 @@ export function useApplicationsData() {
     await fetchData();
   };
 
-  return { applications, enrollments, project, cohort, metrics, formationProgress, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {
