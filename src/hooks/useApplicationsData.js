@@ -230,21 +230,58 @@ export function useApplicationsData() {
     return { participants, active, inactive, globalAvg, distribution };
   }, [courseStatus, coursesList, enrollments]);
 
-  // Asistencia por candidato: { candidate_id: { grupo, sesiones:[], cafes:[], entregables:[] } }
+  // Actividades que YA ocurrieron. Una actividad ocurrió si:
+  //   • tiene fecha y esa fecha ya pasó (o es hoy)  → sesiones
+  //   • no tiene fecha pero al menos alguien asistió → cafés/entregables (los futuros están en 0 para todo el grupo)
+  const occurredActivities = useMemo(() => {
+    const agg = {};
+    sessionAttendance.forEach(r => {
+      const k = `${r.grupo}|${r.tipo}|${r.actividad}`;
+      if (!agg[k]) agg[k] = { fecha: r.fecha, anyAttended: false };
+      if (r.asistio === true) agg[k].anyAttended = true;
+    });
+    const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
+    const set = new Set();
+    Object.entries(agg).forEach(([k, v]) => {
+      const ocurrio = v.fecha ? (new Date(v.fecha) <= hoy) : v.anyAttended;
+      if (ocurrio) set.add(k);
+    });
+    return set;
+  }, [sessionAttendance]);
+
+  // % contando solo actividades ocurridas (null si aún no ocurre ninguna)
+  const pctOcurridas = (items) => {
+    const occ = items.filter(i => i.occurred);
+    if (!occ.length) return null;
+    return Math.round((occ.filter(i => i.asistio === true).length / occ.length) * 100);
+  };
+
+  // Asistencia por candidato con flag `occurred` y porcentajes ajustados (solo ocurridas)
   const attendanceByCandidate = useMemo(() => {
     const map = {};
     sessionAttendance.forEach(r => {
       if (!map[r.candidate_id]) map[r.candidate_id] = { grupo: r.grupo, sesiones: [], cafes: [], entregables: [] };
       const bucket = r.tipo === 'sesion' ? 'sesiones' : r.tipo === 'cafe' ? 'cafes' : 'entregables';
-      map[r.candidate_id][bucket].push(r);
+      const occurred = occurredActivities.has(`${r.grupo}|${r.tipo}|${r.actividad}`);
+      map[r.candidate_id][bucket].push({ ...r, occurred });
     });
     Object.values(map).forEach(g => {
       ['sesiones', 'cafes', 'entregables'].forEach(k => g[k].sort((a, b) => (a.orden || 0) - (b.orden || 0)));
+      g.pctSesiones = pctOcurridas(g.sesiones);
+      g.pctCafes = pctOcurridas(g.cafes);
+      g.pctEntregables = pctOcurridas(g.entregables);
+      // Total ponderado ajustado: renormaliza pesos sobre los componentes que ya tienen actividades ocurridas
+      const parts = [];
+      if (g.pctSesiones != null) parts.push([0.35, g.pctSesiones]);
+      if (g.pctCafes != null) parts.push([0.40, g.pctCafes]);
+      if (g.pctEntregables != null) parts.push([0.25, g.pctEntregables]);
+      const wsum = parts.reduce((s, [w]) => s + w, 0);
+      g.totalPonderado = wsum ? Math.round(parts.reduce((s, [w, v]) => s + w * v, 0) / wsum) : null;
     });
     return map;
-  }, [sessionAttendance]);
+  }, [sessionAttendance, occurredActivities]);
 
-  // Asistencia agregada por grupo y por sesión (para gráficos de avance)
+  // Asistencia agregada por grupo y por sesión (para gráficos). Marca sesiones pendientes.
   const groupAttendance = useMemo(() => {
     const groups = {};
     sessionAttendance.forEach(r => {
@@ -261,10 +298,14 @@ export function useApplicationsData() {
     Object.entries(groups).forEach(([grupo, sesiones]) => {
       out[grupo] = Object.values(sesiones)
         .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-        .map(s => ({ ...s, pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0 }));
+        .map(s => ({
+          ...s,
+          occurred: occurredActivities.has(`${grupo}|sesion|${s.actividad}`),
+          pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0,
+        }));
     });
     return out;
-  }, [sessionAttendance]);
+  }, [sessionAttendance, occurredActivities]);
 
   // Computed metrics
   const metrics = useMemo(() => {

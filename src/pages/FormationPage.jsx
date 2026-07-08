@@ -28,6 +28,36 @@ function Bar({ pct, width = 90 }) {
   );
 }
 
+// Recuadros ✓/✗ por actividad + porcentaje (mismo diseño que el perfil)
+function AttendanceCells({ items, pct }) {
+  const hasItems = items && items.length > 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+      {hasItems && (
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 156 }}>
+          {items.map((it, i) => {
+            const pending = it.occurred === false;             // aún no ocurre → neutro
+            const attended = !pending && it.asistio === true;
+            const missed = !pending && it.asistio === false;
+            const bg = pending ? '#0f172a' : attended ? '#10b98122' : missed ? '#ef444422' : '#1e293b';
+            const color = pending ? '#334155' : attended ? '#10b981' : missed ? '#ef4444' : '#475569';
+            const estado = pending ? 'Pendiente' : attended ? 'Asistió' : missed ? 'No asistió' : 'Sin registro';
+            return (
+              <span key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
+                style={{ width: 19, height: 19, borderRadius: 4, background: bg, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(pct), minWidth: 30, textAlign: 'right' }}>
+        {pct == null ? '—' : `${pct}%`}
+      </span>
+    </div>
+  );
+}
+
 // Badge que cuenta la historia de la persona (transición de nivel)
 function HistoryBadge({ profile }) {
   const c = profile.cambioNivel || '';
@@ -56,14 +86,15 @@ function SessionAttendanceChart({ sessions }) {
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 130, paddingTop: 8 }}>
         {sessions.map((s, i) => {
           const label = s.actividad.replace(/Sesi[oó]n\s*/i, '').replace(/^\d+\s*/, '').trim() || `S${i + 1}`;
+          const pending = s.occurred === false;
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(s.pct) }}>{s.pct}%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#475569' : progressColor(s.pct) }}>{pending ? '—' : `${s.pct}%`}</span>
               <div style={{ width: '100%', maxWidth: 46, background: '#1e293b', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: `${s.pct}%`, background: progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
+                <div style={{ width: '100%', height: pending ? '6px' : `${s.pct}%`, background: pending ? '#334155' : progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
               </div>
               <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{label}</span>
-              <span style={{ fontSize: 9, color: '#475569' }}>{s.asistieron}/{s.total}</span>
+              <span style={{ fontSize: 9, color: '#475569' }}>{pending ? 'Pendiente' : `${s.asistieron}/${s.total}`}</span>
             </div>
           );
         })}
@@ -91,6 +122,8 @@ export default function FormationPage({ enrollments = [], formationProgress, att
     return enrollments.filter(enr => enr.custom_form_data?.elegido !== false).map(enr => {
       const c = enr.candidate || {};
       const cf = enr.custom_form_data || {};
+      // Porcentajes ajustados (solo actividades ocurridas); fallback al Excel si no hay filas de asistencia.
+      const att = attendanceByCandidate[c.id];
       return {
         id: enr.id,
         candidate_id: c.id,
@@ -106,13 +139,15 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         historia: cf.historia || null,
         motivoCambio: cf.motivo_cambio || null,
         completitud: cf.completitud_nivelacion ?? null,
-        pondSesiones: pct01(cf.pond_sesiones),
-        pondCafes: pct01(cf.pond_cafes),
-        pondEntregables: pct01(cf.pond_entregables),
-        totalPonderado: pct01(cf.total_ponderado),
+        // Si hay filas de asistencia, usar los % ajustados (null = aún no ocurre ninguna → "—");
+        // solo si no hay asistencia registrada, caer al valor del Excel.
+        pondSesiones: att ? att.pctSesiones : pct01(cf.pond_sesiones),
+        pondCafes: att ? att.pctCafes : pct01(cf.pond_cafes),
+        pondEntregables: att ? att.pctEntregables : pct01(cf.pond_entregables),
+        totalPonderado: att ? att.totalPonderado : pct01(cf.total_ponderado),
       };
     });
-  }, [enrollments]);
+  }, [enrollments, attendanceByCandidate]);
 
   // Stats globales por grupo
   const groupStats = useMemo(() => {
@@ -247,7 +282,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
 
         {/* Tabla */}
         <div className="table-container" style={{ background: 'var(--bg-primary)', padding: 12, borderRadius: 'var(--radius-md)', overflowX: 'auto' }}>
-          <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 860 }}>
+          <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 1040 }}>
             <thead>
               <tr>
                 {['Participante', 'Documento', 'Historial', 'Asist. sesiones', 'Cafés', 'Entregable', 'Total', 'Estado'].map((h, i) => (
@@ -256,7 +291,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
               </tr>
             </thead>
             <tbody>
-              {filtered.map(p => (
+              {filtered.map(p => {
+                const att = attendanceByCandidate[p.candidate_id] || {};
+                return (
                 <tr key={p.id} onClick={() => setSelectedProfile(p)} style={{ cursor: 'pointer', opacity: p.isActive ? 1 : 0.55 }}>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'left', borderRadius: 4 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.fullName}</div>
@@ -265,15 +302,13 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4, fontSize: 13 }}>{p.doc}</td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}><HistoryBadge profile={p} /></td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'center' }}><Bar pct={p.pondSesiones} /></div>
+                    <AttendanceCells items={att.sesiones} pct={p.pondSesiones} />
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'center' }}><Bar pct={p.pondCafes} width={60} /></div>
+                    <AttendanceCells items={att.cafes} pct={p.pondCafes} />
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                    {p.pondEntregables == null ? <span style={{ color: '#475569' }}>—</span>
-                      : p.pondEntregables >= 100 ? <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span>
-                      : <span style={{ color: '#ef4444', fontWeight: 700 }}>✗</span>}
+                    <AttendanceCells items={att.entregables} pct={p.pondEntregables} />
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
                     <span style={{ fontSize: 14, fontWeight: 800, color: progressColor(p.totalPonderado) }}>{p.totalPonderado ?? '—'}%</span>
@@ -284,7 +319,8 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                       : <span className="badge badge-rejected" style={{ background: 'var(--accent-rose-dim)', color: 'var(--accent-rose)' }}>Inactivo</span>}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay participantes en este grupo.</td></tr>
               )}

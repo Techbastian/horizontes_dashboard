@@ -26,16 +26,18 @@ function AttendanceDots({ items, labelPrefix }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
       {items.map((it, i) => {
-        const attended = it.asistio === true;
-        const missed = it.asistio === false;
-        const bg = attended ? '#10b98122' : missed ? '#ef444422' : '#1e293b';
-        const color = attended ? '#10b981' : missed ? '#ef4444' : '#475569';
+        const pending = it.occurred === false;             // aún no ocurre → neutro
+        const attended = !pending && it.asistio === true;
+        const missed = !pending && it.asistio === false;
+        const bg = pending ? '#0f172a' : attended ? '#10b98122' : missed ? '#ef444422' : '#1e293b';
+        const color = pending ? '#334155' : attended ? '#10b981' : missed ? '#ef4444' : '#475569';
+        const estado = pending ? 'Pendiente' : attended ? 'Asistió' : missed ? 'No asistió' : 'Sin registro';
         const short = it.actividad.replace(/Sesi[oó]n\s*/i, 'S').replace(/Caf[eé]\s*/i, 'C').replace(/Entregable\s*/i, 'E').replace(/\s+/g, ' ').trim();
         return (
-          <div key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${attended ? 'Asistió' : missed ? 'No asistió' : 'Sin registro'}`}
+          <div key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
-              {attended ? '✓' : missed ? '✗' : '·'}
+              {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}
             </div>
             <span style={{ fontSize: 9, color: '#64748b' }}>{short || `${labelPrefix}${i + 1}`}</span>
           </div>
@@ -174,19 +176,19 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {attendance.sesiones?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Sesiones <span style={{ color: '#64748b' }}>({profile.pondSesiones ?? 0}%)</span></div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Sesiones <span style={{ color: '#64748b' }}>({profile.pondSesiones == null ? '—' : `${profile.pondSesiones}%`})</span></div>
                     <AttendanceDots items={attendance.sesiones} labelPrefix="S" />
                   </div>
                 )}
                 {attendance.cafes?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes ?? 0}%)</span></div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes == null ? '—' : `${profile.pondCafes}%`})</span></div>
                     <AttendanceDots items={attendance.cafes} labelPrefix="C" />
                   </div>
                 )}
                 {attendance.entregables?.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Entregables <span style={{ color: '#64748b' }}>({profile.pondEntregables ?? 0}%)</span></div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Entregables <span style={{ color: '#64748b' }}>({profile.pondEntregables == null ? '—' : `${profile.pondEntregables}%`})</span></div>
                     <AttendanceDots items={attendance.entregables} labelPrefix="E" />
                   </div>
                 )}

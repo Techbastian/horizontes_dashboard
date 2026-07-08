@@ -239,9 +239,11 @@ async function main() {
     if (docsSeguimiento.has(doc)) continue; // en hoja → activo, ya procesado arriba
     const m = matriz.get(doc);
     const rutaPrevia = e.custom_form_data?.ruta_asignada || (m?.ruta_inicial && m.ruta_inicial !== 'No aplica' ? m.ruta_inicial : null) || null;
-    // Fue elegido si: (a) "Seleccionado" en la matriz, o (b) ya era participante marcado elegido:true
-    // (ej. alguien de Activación que sale de la hoja → inactivo, no se oculta).
-    const fueElegido = !!(m && m.seleccionado) || e.custom_form_data?.elegido === true;
+    // Activación apenas inicia hoy: quien sale de su hoja NO cuenta como inactivo del programa
+    // (no hace parte de la selección final) → se oculta para no generar confusión.
+    const esActivacionDropout = rutaPrevia === 'Activación';
+    // Fue elegido si: (a) "Seleccionado" en la matriz, o (b) ya era participante Junior/Senior (elegido:true).
+    const fueElegido = !esActivacionDropout && (!!(m && m.seleccionado) || e.custom_form_data?.elegido === true);
 
     if (fueElegido) {
       const hist = derivarHistorial('Inactivo', m);
