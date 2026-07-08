@@ -397,14 +397,6 @@ export function useApplicationsData() {
       }
     });
 
-    // Funnel data
-    const funnelData = [
-      { name: 'Postulados', value: total, color: '#7c3aed' },
-      { name: 'Elegibles', value: elegibles.length, color: '#0d9488' },
-      { name: 'Evaluados', value: evaluados.length, color: '#3b82f6' },
-      { name: 'Entrevistados', value: entrevistados.length, color: '#f97316' },
-    ];
-
     // Status distribution
     const statusDistribution = {};
     withFases.forEach(a => {
@@ -502,12 +494,18 @@ export function useApplicationsData() {
 
     // Transiciones a lo largo del proceso formativo (desde enrollments)
     const transiciones = { ascensos: 0, descensos: 0, activacion: 0, inactivos: 0, cambiaronNivel: 0, inactivosPorGrupo: {} };
+    // Distribución de seleccionados (elegidos) por ruta y estado
+    const selActivos = { Senior: 0, Junior: 0, 'Activación': 0 };
+    const selInactivos = { Senior: 0, Junior: 0, 'Activación': 0 };
+    let totalElegidos = 0;
     enrollments.forEach(e => {
       const cf = e.custom_form_data || {};
       if (cf.elegido === false) return; // nunca elegido → no cuenta
       const activo = cf.estado_activo !== false && e.status !== 'inactive';
       const cambio = cf.cambio_nivel || '';
       const ruta = cf.ruta_asignada || 'Sin asignar';
+      totalElegidos++;
+      if (ruta in selActivos) (activo ? selActivos : selInactivos)[ruta]++;
       if (!activo) {
         transiciones.inactivos++;
         transiciones.inactivosPorGrupo[ruta] = (transiciones.inactivosPorGrupo[ruta] || 0) + 1;
@@ -519,9 +517,27 @@ export function useApplicationsData() {
     });
     transiciones.cambiaronNivel = transiciones.ascensos + transiciones.descensos;
 
+    const seleccionados = {
+      activos: selActivos,
+      inactivos: selInactivos,
+      totalActivos: selActivos.Senior + selActivos.Junior + selActivos['Activación'],
+      totalInactivos: selInactivos.Senior + selInactivos.Junior + selInactivos['Activación'],
+      totalElegidos,
+      juniorMasActivacion: selActivos.Junior + selActivos['Activación'], // Activación es nivel Junior
+    };
+
+    // Funnel: Postulados → Elegibles → distribución de seleccionados (Junior incl. Activación, Senior)
+    const funnelData = [
+      { name: 'Postulados', value: total, color: '#7c3aed' },
+      { name: 'Elegibles', value: elegibles.length, color: '#0d9488' },
+      { name: 'Junior', label: 'Junior (incl. Activación)', value: selActivos.Junior + selActivos['Activación'], color: '#7c3aed' },
+      { name: 'Senior', value: selActivos.Senior, color: '#0d9488' },
+    ];
+
     return {
       total,
       transiciones,
+      seleccionados,
       elegibles: elegibles.length,
       noElegibles: noElegibles.length,
       evaluados: evaluados.length,

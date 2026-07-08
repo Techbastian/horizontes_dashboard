@@ -15,11 +15,11 @@ export default function FunnelChart({ data }) {
       case 'Elegibles':
         navigate('/candidatos', { state: { filterElegibilidad: 'Elegible' } });
         break;
-      case 'Evaluados':
-        navigate('/candidatos', { state: { requireFase2: true } });
+      case 'Senior':
+        navigate('/candidatos', { state: { filterNivel: 'Senior' } });
         break;
-      case 'Entrevistados': // Depending on the raw metric name created in useApplicationsData
-        navigate('/candidatos', { state: { requireFase3: true } });
+      case 'Junior':
+        navigate('/formacion');
         break;
       default:
         navigate('/candidatos');
@@ -42,7 +42,7 @@ export default function FunnelChart({ data }) {
             title={`Ver detalles de ${step.name}`}
           >
             <div className="funnel-step-titles">
-              <span className="funnel-step-name">{step.name}</span>
+              <span className="funnel-step-name">{step.label || step.name}</span>
               <span className="funnel-step-count">{step.value} personas</span>
             </div>
             

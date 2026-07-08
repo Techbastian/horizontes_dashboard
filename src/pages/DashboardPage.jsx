@@ -62,8 +62,8 @@ export default function DashboardPage({ metrics, applications, formationProgress
         </div>
       </div>
 
-      {/* KPI Cards (5 cards) */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+      {/* KPI Cards */}
+      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <KPICard
           label="Total Postulados"
           value={metrics.total.toLocaleString()}
@@ -83,33 +83,59 @@ export default function DashboardPage({ metrics, applications, formationProgress
           onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'Elegible' } })}
         />
         <KPICard
-          label="Lista Reemplazo"
-          value={metrics.reemplazos.toLocaleString()}
-          icon="🔄"
-          change={metrics.total > 0 ? parseFloat(((metrics.reemplazos / metrics.total) * 100).toFixed(1)) : 0}
-          changeLabel="% del total"
+          label="Seleccionados"
+          value={(metrics.seleccionados?.totalActivos ?? 0).toLocaleString()}
+          icon="⭐"
+          change={metrics.elegibles > 0 ? parseFloat(((metrics.seleccionados.totalActivos / metrics.elegibles) * 100).toFixed(1)) : 0}
+          changeLabel="de elegibles · activos"
           index={2}
           onClick={() => navigate('/formacion')}
         />
-        <KPICard
-          label="Form. Actitudinal"
-          value={metrics.entrevistados.toLocaleString()}
-          icon="🎤"
-          change={metrics.elegibles > 0 ? parseFloat(((metrics.entrevistados / metrics.elegibles) * 100).toFixed(1)) : 0}
-          changeLabel="% de elegibles"
-          index={3}
-          onClick={() => navigate('/candidatos', { state: { requireFase3: true } })}
-        />
-        <KPICard
-          label="No Elegibles"
-          value={metrics.noElegibles.toLocaleString()}
-          icon="⛔"
-          change={metrics.total > 0 ? parseFloat(((metrics.noElegibles / metrics.total) * 100).toFixed(1)) : 0}
-          changeLabel="% del total"
-          index={4}
-          onClick={() => navigate('/candidatos', { state: { filterElegibilidad: 'No elegible' } })}
-        />
       </div>
+
+      {/* Distribución de Seleccionados */}
+      {metrics.seleccionados && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">Distribución de Seleccionados</div>
+              <div className="card-subtitle">
+                {metrics.seleccionados.totalActivos} activos de {metrics.seleccionados.totalElegidos} seleccionados
+                {metrics.seleccionados.totalInactivos > 0 ? ` · ${metrics.seleccionados.totalInactivos} inactivos` : ''}
+              </div>
+            </div>
+            <button className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => navigate('/formacion')}>
+              Ver formación →
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 12 }}>
+            {[
+              { key: 'Senior', label: 'Ruta Senior', icon: '⭐', color: '#0d9488', bg: 'rgba(13,148,136,0.08)', bd: 'rgba(13,148,136,0.2)' },
+              { key: 'Junior', label: 'Ruta Junior', icon: '🌱', color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)' },
+              { key: 'Activación', label: 'Estrategia de Activación', icon: '⚡', color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)' },
+            ].map(g => {
+              const activos = metrics.seleccionados.activos[g.key] || 0;
+              const inactivos = metrics.seleccionados.inactivos[g.key] || 0;
+              return (
+                <div key={g.key} onClick={() => navigate('/formacion')}
+                  style={{ background: g.bg, border: `1px solid ${g.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.label}</div>
+                    <span style={{ fontSize: 20, opacity: 0.5 }}>{g.icon}</span>
+                  </div>
+                  <div style={{ fontSize: 42, fontWeight: 900, color: g.color, lineHeight: 1.1, marginTop: 6 }}>{activos}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    activos{inactivos > 0 ? ` · ${inactivos} inactivos` : ''}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+            ⚡ La Estrategia de Activación es nivel Junior · Junior + Activación = <strong style={{ color: 'var(--text-secondary)' }}>{metrics.seleccionados.juniorMasActivacion}</strong> personas
+          </div>
+        </div>
+      )}
 
       {/* Movimientos en el proceso formativo */}
       {metrics.transiciones && (
@@ -151,7 +177,7 @@ export default function DashboardPage({ metrics, applications, formationProgress
           <div className="card-header">
             <div>
               <div className="card-title">Funnel de Selección</div>
-              <div className="card-subtitle">Progresión a través de las fases del pipeline</div>
+              <div className="card-subtitle">Postulados, elegibles y distribución de seleccionados por ruta</div>
             </div>
           </div>
           <FunnelChart data={metrics.funnelData} />
