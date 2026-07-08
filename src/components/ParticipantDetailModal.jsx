@@ -160,6 +160,34 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
             </div>
           )}
 
+          {/* Motivo de retiro */}
+          {profile.retiro && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                🚪 Motivo de retiro
+              </div>
+              <div style={{ background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: '#ef444422', color: '#f87171' }}>{profile.retiro.categoria}</span>
+                  {profile.retiro.fecha && <span style={{ fontSize: 12, color: '#64748b' }}>{profile.retiro.fecha}</span>}
+                </div>
+                <div style={{ fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{profile.retiro.motivo}</div>
+              </div>
+            </div>
+          )}
+
+          {/* En riesgo (aún no retirado) */}
+          {!profile.retiro && profile.enRiesgo && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+                ⚠️ En riesgo de deserción
+              </div>
+              <div style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 10, padding: '14px 16px', fontSize: 13, color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {profile.enRiesgo.situacion}
+              </div>
+            </div>
+          )}
+
           {/* Asistencia sesión por sesión */}
           {attendance && (attendance.sesiones?.length || attendance.cafes?.length || attendance.entregables?.length) ? (
             <div>
@@ -174,12 +202,20 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {attendance.sesiones?.length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Sesiones <span style={{ color: '#64748b' }}>({profile.pondSesiones == null ? '—' : `${profile.pondSesiones}%`})</span></div>
-                    <AttendanceDots items={attendance.sesiones} labelPrefix="S" />
-                  </div>
-                )}
+                {attendance.sesiones?.length > 0 && (() => {
+                  const obs = attendance.sesiones.find(s => s.observacion)?.observacion;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Sesiones <span style={{ color: '#64748b' }}>({profile.pondSesiones == null ? '—' : `${profile.pondSesiones}%`})</span></div>
+                      <AttendanceDots items={attendance.sesiones} labelPrefix="S" />
+                      {obs && (
+                        <div style={{ marginTop: 8, fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
+                          📝 Observación / motivo de inasistencia: <span style={{ color: '#cbd5e1' }}>{obs}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 {attendance.cafes?.length > 0 && (
                   <div>
                     <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>Cafés de conocimiento <span style={{ color: '#64748b' }}>({profile.pondCafes == null ? '—' : `${profile.pondCafes}%`})</span></div>

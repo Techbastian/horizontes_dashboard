@@ -281,31 +281,56 @@ export function useApplicationsData() {
     return map;
   }, [sessionAttendance, occurredActivities]);
 
-  // Asistencia agregada por grupo y por sesión (para gráficos). Marca sesiones pendientes.
+  // Asistencia agregada por grupo, para gráficos: { grupo: { sesiones:[], cafes:[] } }. Marca pendientes.
   const groupAttendance = useMemo(() => {
-    const groups = {};
+    const groups = {}; // grupo -> tipo -> actividad -> agg
     sessionAttendance.forEach(r => {
-      if (r.tipo !== 'sesion') return;
-      if (!groups[r.grupo]) groups[r.grupo] = {};
-      const key = r.actividad;
-      if (!groups[r.grupo][key]) groups[r.grupo][key] = { actividad: r.actividad, fecha: r.fecha, orden: r.orden, asistieron: 0, total: 0 };
+      if (r.tipo !== 'sesion' && r.tipo !== 'cafe') return;
+      groups[r.grupo] = groups[r.grupo] || { sesion: {}, cafe: {} };
+      const bucket = groups[r.grupo][r.tipo];
+      if (!bucket[r.actividad]) bucket[r.actividad] = { actividad: r.actividad, fecha: r.fecha, orden: r.orden, asistieron: 0, total: 0 };
       if (r.asistio !== null) {
-        groups[r.grupo][key].total++;
-        if (r.asistio) groups[r.grupo][key].asistieron++;
+        bucket[r.actividad].total++;
+        if (r.asistio) bucket[r.actividad].asistieron++;
       }
     });
+    const build = (grupo, tipo, obj) => Object.values(obj)
+      .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+      .map(s => ({ ...s, occurred: occurredActivities.has(`${grupo}|${tipo}|${s.actividad}`), pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0 }));
     const out = {};
-    Object.entries(groups).forEach(([grupo, sesiones]) => {
-      out[grupo] = Object.values(sesiones)
-        .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-        .map(s => ({
-          ...s,
-          occurred: occurredActivities.has(`${grupo}|sesion|${s.actividad}`),
-          pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0,
-        }));
+    Object.entries(groups).forEach(([grupo, tipos]) => {
+      out[grupo] = { sesiones: build(grupo, 'sesion', tipos.sesion), cafes: build(grupo, 'cafe', tipos.cafe) };
     });
     return out;
   }, [sessionAttendance, occurredActivities]);
+
+  // Retiros y casos en riesgo (desde custom_form_data)
+  const retiros = useMemo(() => {
+    const casos = [], enRiesgo = [];
+    const porCategoria = {}, porNivel = { Junior: 0, Senior: 0, 'Activación': 0 };
+    const nivelKey = (n) => /senior/i.test(n || '') ? 'Senior' : /activ/i.test(n || '') ? 'Activación' : 'Junior';
+    enrollments.forEach(e => {
+      const cf = e.custom_form_data || {};
+      const c = e.candidate || {};
+      const nombre = cf.nombre_completo || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Desconocido';
+      const doc = cf.cedula || c.document_number || 'S/N';
+      if (cf.retiro) {
+        const nivel = cf.retiro.nivel || cf.ruta_asignada || 'Junior';
+        casos.push({ id: e.id, candidate_id: c.id, nombre, doc, email: c.email || '', nivel, ...cf.retiro });
+        porCategoria[cf.retiro.categoria] = (porCategoria[cf.retiro.categoria] || 0) + 1;
+        porNivel[nivelKey(nivel)] = (porNivel[nivelKey(nivel)] || 0) + 1;
+      }
+      if (cf.en_riesgo) {
+        enRiesgo.push({
+          id: e.id, candidate_id: c.id, nombre, doc, email: c.email || '',
+          situacion: cf.riesgo_situacion, canal: cf.riesgo_canal, fecha: cf.riesgo_fecha,
+          ruta: cf.ruta_asignada, yaRetirado: !!cf.retiro,
+          activo: cf.estado_activo !== false && e.status !== 'inactive',
+        });
+      }
+    });
+    return { casos, enRiesgo, porCategoria, porNivel, total: casos.length, totalRiesgo: enRiesgo.length };
+  }, [enrollments]);
 
   // Computed metrics
   const metrics = useMemo(() => {
@@ -599,7 +624,7 @@ export function useApplicationsData() {
     await fetchData();
   };
 
-  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {

@@ -56,6 +56,15 @@ export default function Sidebar({ isOpen, onClose }) {
           </NavLink>
 
           <NavLink
+            to="/retiros"
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
+          >
+            <span className="nav-item-icon">🚪</span>
+            Retención y Retiros
+          </NavLink>
+
+          <NavLink
             to="/eventos"
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             onClick={onClose}

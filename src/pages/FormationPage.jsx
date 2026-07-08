@@ -75,25 +75,36 @@ function HistoryBadge({ profile }) {
   );
 }
 
-// Mini-gráfico: asistencia por sesión del grupo
-function SessionAttendanceChart({ sessions }) {
-  if (!sessions || !sessions.length) return null;
+// Fecha dd/mm a partir de ISO
+function fechaCorta(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Mini-gráfico de asistencia por actividad (sesiones o cafés), con fecha visible
+function AttendanceBarChart({ title, items, kind }) {
+  if (!items || !items.length) return null;
   return (
     <div className="card" style={{ padding: '16px 20px' }}>
       <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14 }}>
-        Asistencia por sesión
+        {title}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 130, paddingTop: 8 }}>
-        {sessions.map((s, i) => {
-          const label = s.actividad.replace(/Sesi[oó]n\s*/i, '').replace(/^\d+\s*/, '').trim() || `S${i + 1}`;
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 130, paddingTop: 8 }}>
+        {items.map((s, i) => {
           const pending = s.occurred === false;
+          const fecha = fechaCorta(s.fecha);
+          const label = kind === 'cafe'
+            ? (s.actividad.replace(/Caf[eé]\s*/i, 'Café ').trim() || `C${i + 1}`)
+            : (fecha || s.actividad.replace(/Sesi[oó]n\s*\d*/i, '').trim() || `S${i + 1}`);
           return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end' }}>
+            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end', minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#475569' : progressColor(s.pct) }}>{pending ? '—' : `${s.pct}%`}</span>
               <div style={{ width: '100%', maxWidth: 46, background: '#1e293b', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
                 <div style={{ width: '100%', height: pending ? '6px' : `${s.pct}%`, background: pending ? '#334155' : progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
               </div>
-              <span style={{ fontSize: 10, color: '#64748b', whiteSpace: 'nowrap' }}>{label}</span>
+              <span style={{ fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap', fontWeight: kind === 'sesion' ? 600 : 400 }}>{label}</span>
               <span style={{ fontSize: 9, color: '#475569' }}>{pending ? 'Pendiente' : `${s.asistieron}/${s.total}`}</span>
             </div>
           );
@@ -139,6 +150,8 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         historia: cf.historia || null,
         motivoCambio: cf.motivo_cambio || null,
         completitud: cf.completitud_nivelacion ?? null,
+        retiro: cf.retiro || null,
+        enRiesgo: cf.en_riesgo ? { situacion: cf.riesgo_situacion, canal: cf.riesgo_canal } : null,
         // Si hay filas de asistencia, usar los % ajustados (null = aún no ocurre ninguna → "—");
         // solo si no hay asistencia registrada, caer al valor del Excel.
         pondSesiones: att ? att.pctSesiones : pct01(cf.pond_sesiones),
@@ -214,25 +227,19 @@ export default function FormationPage({ enrollments = [], formationProgress, att
       </div>
 
       {/* Panel del grupo activo */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: 16, marginBottom: 24 }}>
-        <div className="card" style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 10 }}>
-          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Promedios del grupo — {meta.label}</div>
-          <div style={{ display: 'flex', gap: 24 }}>
-            <div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Asistencia a sesiones</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgSesiones) }}>{st.avgSesiones ?? '—'}%</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Total ponderado</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgTotal) }}>{st.avgTotal ?? '—'}%</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Participantes</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: '#f1f5f9' }}>{st.activos ?? 0}</div>
-            </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 40 }}>
+          <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', width: 120 }}>Promedios del grupo<br /><span style={{ color: meta.color, fontSize: 13 }}>{meta.label}</span></div>
+          <div style={{ display: 'flex', gap: 32 }}>
+            <div><div style={{ fontSize: 12, color: '#64748b' }}>Asistencia a sesiones</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgSesiones) }}>{st.avgSesiones ?? '—'}%</div></div>
+            <div><div style={{ fontSize: 12, color: '#64748b' }}>Total ponderado</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgTotal) }}>{st.avgTotal ?? '—'}%</div></div>
+            <div><div style={{ fontSize: 12, color: '#64748b' }}>Participantes</div><div style={{ fontSize: 30, fontWeight: 800, color: '#f1f5f9' }}>{st.activos ?? 0}</div></div>
           </div>
         </div>
-        <SessionAttendanceChart sessions={groupAttendance[activeTab]} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <AttendanceBarChart title="Asistencia por sesión" items={groupAttendance[activeTab]?.sesiones} kind="sesion" />
+          <AttendanceBarChart title="Asistencia a cafés de conocimiento" items={groupAttendance[activeTab]?.cafes} kind="cafe" />
+        </div>
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

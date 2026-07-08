@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import CandidatesPage from './pages/CandidatesPage';
 import FormationPage from './pages/FormationPage';
+import RetirosPage from './pages/RetirosPage';
 import EventsPage from './pages/EventsPage';
 
 function LoadingScreen() {
@@ -29,7 +30,7 @@ function ErrorScreen({ message, onRetry }) {
 }
 
 export default function App() {
-  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
+  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
 
   if (loading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
@@ -72,6 +73,10 @@ export default function App() {
                 updateEnrollment={updateEnrollment}
               />
             }
+          />
+          <Route
+            path="/retiros"
+            element={<RetirosPage retiros={retiros} metrics={metrics} />}
           />
           <Route
             path="/eventos"
