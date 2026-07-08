@@ -45,9 +45,19 @@ function extractDate(label) {
   return `${YEAR}-${month}-${day}`;
 }
 
-function parseSeguimiento(wb, sheetName, grupo, headerRange = 0) {
+// Detecta la fila del encabezado buscando "Número de Documento" (robusto ante cambios de layout)
+function detectHeaderRow(ws) {
+  const raw = XLSX.utils.sheet_to_json(ws, { defval: null, header: 1 });
+  for (let i = 0; i < Math.min(6, raw.length); i++) {
+    if ((raw[i] || []).some(c => String(c ?? '').trim().toLowerCase() === 'número de documento')) return i;
+  }
+  return 0;
+}
+
+function parseSeguimiento(wb, sheetName, grupo) {
   const ws = wb.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json(ws, { defval: null, range: headerRange });
+  const headerRow = detectHeaderRow(ws);
+  const rows = XLSX.utils.sheet_to_json(ws, { defval: null, range: headerRow });
   const people = [];
   for (const r of rows) {
     const doc = norm(r['Número de Documento']);
@@ -144,9 +154,9 @@ async function main() {
   console.log(`${'='.repeat(70)}\n`);
 
   const wb = XLSX.readFile(EXCEL_PATH);
-  const jr = parseSeguimiento(wb, 'Seguimiento progreso Junior', 'Junior', 0);
-  const sr = parseSeguimiento(wb, 'Seguimiento progreso Senior', 'Senior', 0);
-  const act = parseSeguimiento(wb, 'Seguimiento progreso grupo de a', 'Activación', 1);
+  const jr = parseSeguimiento(wb, 'Seguimiento progreso Junior', 'Junior');
+  const sr = parseSeguimiento(wb, 'Seguimiento progreso Senior', 'Senior');
+  const act = parseSeguimiento(wb, 'Seguimiento progreso grupo de a', 'Activación');
   const matriz = parseMatriz(wb);
   console.log(`📄 Hojas: Junior=${jr.length}  Senior=${sr.length}  Activación=${act.length}  | Matriz=${matriz.size} personas`);
 
@@ -229,18 +239,21 @@ async function main() {
     if (docsSeguimiento.has(doc)) continue; // en hoja → activo, ya procesado arriba
     const m = matriz.get(doc);
     const rutaPrevia = e.custom_form_data?.ruta_asignada || (m?.ruta_inicial && m.ruta_inicial !== 'No aplica' ? m.ruta_inicial : null) || null;
-    const fueElegido = !!(m && m.seleccionado); // Resultado de Selección Final = "Seleccionado"
+    // Fue elegido si: (a) "Seleccionado" en la matriz, o (b) ya era participante marcado elegido:true
+    // (ej. alguien de Activación que sale de la hoja → inactivo, no se oculta).
+    const fueElegido = !!(m && m.seleccionado) || e.custom_form_data?.elegido === true;
 
     if (fueElegido) {
       const hist = derivarHistorial('Inactivo', m);
+      const esInactivoMatriz = m && (/inactivo/i.test(m.clasificacion) || /inactivo/i.test(m.ruta_definitiva_matriz));
       inactivos.push({
-        id: e.id, doc, name: m.name || e.custom_form_data?.nombre_completo, grupoPrevio: rutaPrevia,
+        id: e.id, doc, name: m?.name || e.custom_form_data?.nombre_completo, grupoPrevio: rutaPrevia,
         custom: {
           ...(e.custom_form_data || {}),
           ruta_asignada: rutaPrevia, estado_activo: false, elegido: true, ...hist,
-          motivo_cambio: (/inactivo/i.test(m.clasificacion) || /inactivo/i.test(m.ruta_definitiva_matriz))
+          motivo_cambio: esInactivoMatriz
             ? (m.cambio_nivel_texto || 'Clasificado como inactivo en la matriz.')
-            : 'No continúa: no figura en las matrices de seguimiento activas.',
+            : 'No continúa: ya no figura en las matrices de seguimiento activas.',
         },
       });
     } else {
