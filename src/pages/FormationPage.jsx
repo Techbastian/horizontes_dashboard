@@ -86,8 +86,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
   }, [formationProgress]);
 
   // Construir perfiles desde enrollments (ya incluye ruta_asignada, historial y ponderados)
+  // Se excluyen quienes nunca fueron elegidos (elegido === false): no forman parte de la selección.
   const profiles = useMemo(() => {
-    return enrollments.map(enr => {
+    return enrollments.filter(enr => enr.custom_form_data?.elegido !== false).map(enr => {
       const c = enr.candidate || {};
       const cf = enr.custom_form_data || {};
       return {

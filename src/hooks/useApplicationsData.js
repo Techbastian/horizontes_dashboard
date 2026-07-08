@@ -463,6 +463,7 @@ export function useApplicationsData() {
     const transiciones = { ascensos: 0, descensos: 0, activacion: 0, inactivos: 0, cambiaronNivel: 0, inactivosPorGrupo: {} };
     enrollments.forEach(e => {
       const cf = e.custom_form_data || {};
+      if (cf.elegido === false) return; // nunca elegido → no cuenta
       const activo = cf.estado_activo !== false && e.status !== 'inactive';
       const cambio = cf.cambio_nivel || '';
       const ruta = cf.ruta_asignada || 'Sin asignar';

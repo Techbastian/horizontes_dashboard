@@ -192,6 +192,7 @@ async function main() {
       nombre_completo: p.name,
       ruta_asignada: p.grupo,
       estado_activo: true,
+      elegido: true,
       ...hist,
       motivo_cambio: m?.cambio_nivel_texto || null,
       como_seleccionado: m?.como_seleccionado || null,
@@ -218,48 +219,52 @@ async function main() {
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
   }
 
-  // Todo enrollment que NO está en una hoja de seguimiento → INACTIVO
-  // (confirmado por el equipo: solo continúan quienes están en las matrices de seguimiento).
-  //   • inactivosMatriz  → clasificados 'Inactivo' en la matriz
-  //   • sinSeguimiento   → seleccionados/enrolled pero fuera de las hojas
-  //   • noEnMatriz       → en BD pero sin registro en la matriz (ej. DANIRA)
-  const inactivosMatriz = [], sinSeguimiento = [], noEnMatriz = [];
+  // Enrollments que NO están en una hoja de seguimiento:
+  //   • inactivos    → FUERON elegidos (Seleccionado en la matriz), ahora inactivos. SÍ aparecen.
+  //   • noElegidos   → NUNCA fueron elegidos ('No seleccionado' o fuera de la matriz).
+  //                    Enrollments heredados/erróneos → elegido:false → NO aparecen en Formación.
+  const inactivos = [], noElegidos = [];
   for (const e of (enrs || [])) {
     const doc = norm(e.custom_form_data?.cedula ?? e.candidates?.document_number);
     if (docsSeguimiento.has(doc)) continue; // en hoja → activo, ya procesado arriba
     const m = matriz.get(doc);
     const rutaPrevia = e.custom_form_data?.ruta_asignada || (m?.ruta_inicial && m.ruta_inicial !== 'No aplica' ? m.ruta_inicial : null) || null;
-    const hist = derivarHistorial('Inactivo', m);
-    const row = {
-      id: e.id, doc, name: m?.name || e.custom_form_data?.nombre_completo, grupoPrevio: rutaPrevia,
-      custom: {
-        ...(e.custom_form_data || {}),
-        ruta_asignada: rutaPrevia, estado_activo: false, ...hist,
-        motivo_cambio: m
-          ? (/inactivo/i.test(m.clasificacion) || /inactivo/i.test(m.ruta_definitiva_matriz)
-              ? (m.cambio_nivel_texto || 'Clasificado como inactivo en la matriz.')
-              : 'No continúa: no figura en las matrices de seguimiento activas.')
-          : 'No figura en la matriz maestra.',
-      },
-    };
-    if (!m) noEnMatriz.push(row);
-    else if (/inactivo/i.test(m.clasificacion) || /inactivo/i.test(m.ruta_definitiva_matriz)) inactivosMatriz.push(row);
-    else sinSeguimiento.push(row);
+    const fueElegido = !!(m && m.seleccionado); // Resultado de Selección Final = "Seleccionado"
+
+    if (fueElegido) {
+      const hist = derivarHistorial('Inactivo', m);
+      inactivos.push({
+        id: e.id, doc, name: m.name || e.custom_form_data?.nombre_completo, grupoPrevio: rutaPrevia,
+        custom: {
+          ...(e.custom_form_data || {}),
+          ruta_asignada: rutaPrevia, estado_activo: false, elegido: true, ...hist,
+          motivo_cambio: (/inactivo/i.test(m.clasificacion) || /inactivo/i.test(m.ruta_definitiva_matriz))
+            ? (m.cambio_nivel_texto || 'Clasificado como inactivo en la matriz.')
+            : 'No continúa: no figura en las matrices de seguimiento activas.',
+        },
+      });
+    } else {
+      // Nunca elegido: nunca tuvo ruta real. Se excluye de la selección definitiva.
+      noElegidos.push({
+        id: e.id, doc, name: m?.name || e.custom_form_data?.nombre_completo, grupoPrevio: rutaPrevia,
+        custom: {
+          ...(e.custom_form_data || {}),
+          elegido: false, estado_activo: false,
+          motivo_exclusion: m ? 'No seleccionado en la matriz maestra.' : 'No figura en la matriz maestra.',
+        },
+      });
+    }
   }
-  const inactivos = [...inactivosMatriz, ...sinSeguimiento, ...noEnMatriz];
 
   // ── Reporte ───────────────────────────────────────────────────────────────
   console.log(`\n${'─'.repeat(70)}\n  RESUMEN DEL PLAN\n${'─'.repeat(70)}`);
   const byGrupo = (arr) => { const g = {}; arr.forEach(x => g[x.grupo] = (g[x.grupo] || 0) + 1); return JSON.stringify(g); };
   console.log(`  Enrollments a ACTUALIZAR (en hoja):     ${plan.updateEnrollments.length}  ${byGrupo(plan.updateEnrollments)}`);
   console.log(`  Enrollments a CREAR (Activación nuevos): ${plan.insertEnrollments.length}  ${byGrupo(plan.insertEnrollments)}`);
-  console.log(`  Marcar INACTIVOS (total):                ${inactivos.length}`);
-  console.log(`     ├─ clasificados 'Inactivo' en matriz: ${inactivosMatriz.length}`);
-  inactivosMatriz.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
-  console.log(`     ├─ sin hoja de seguimiento:           ${sinSeguimiento.length}`);
-  sinSeguimiento.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
-  console.log(`     └─ no figuran en la matriz:           ${noEnMatriz.length}`);
-  noEnMatriz.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
+  console.log(`  INACTIVOS que SÍ fueron elegidos (aparecen): ${inactivos.length}`);
+  inactivos.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
+  console.log(`  ❌ NUNCA elegidos (elegido:false, NO aparecen): ${noElegidos.length}`);
+  noElegidos.forEach(x => console.log(`       • ${x.doc} ${x.name} (ruta_BD previa: ${x.grupoPrevio})`));
   console.log(`  Filas de asistencia a cargar:             ${plan.attendanceRows.length}`);
   if (plan.sinCandidato.length) {
     console.log(`  ⚠️  En hoja pero SIN candidato en BD:      ${plan.sinCandidato.length}`);
@@ -299,14 +304,23 @@ async function main() {
   }
   console.log(`   ✅ ${upd} enrollments actualizados`);
 
-  // 3. Inactivos
+  // 3. Inactivos (elegidos)
   let ina = 0;
   for (const x of inactivos) {
     const { error } = await supabase.from('program_enrollments')
       .update({ custom_form_data: x.custom, status: 'inactive' }).eq('id', x.id);
     if (error) console.warn(`   ⚠️ inactivo ${x.doc}: ${error.message}`); else ina++;
   }
-  console.log(`   ✅ ${ina} marcados inactivos`);
+  console.log(`   ✅ ${ina} marcados inactivos (elegidos)`);
+
+  // 3b. Nunca elegidos → elegido:false (excluidos de Formación)
+  let nel = 0;
+  for (const x of noElegidos) {
+    const { error } = await supabase.from('program_enrollments')
+      .update({ custom_form_data: x.custom, status: 'inactive' }).eq('id', x.id);
+    if (error) console.warn(`   ⚠️ noElegido ${x.doc}: ${error.message}`); else nel++;
+  }
+  console.log(`   ✅ ${nel} marcados como NO elegidos (excluidos)`);
 
   // 4. session_attendance (si la tabla existe)
   const { error: tableErr } = await supabase.from('session_attendance').select('id', { head: true, count: 'exact' });

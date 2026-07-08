@@ -100,10 +100,13 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
         .filter(Boolean)
     );
 
-    // Mapa candidate_id → custom_form_data del enrollment (para el nivel de selección)
+    // Mapa candidate_id → custom_form_data del enrollment (para el nivel de selección).
+    // Se excluyen los que nunca fueron elegidos (elegido === false).
     const enrollmentMap = new Map();
     (enrollments || []).forEach(e => {
-      if (e.candidate?.id) enrollmentMap.set(e.candidate.id, e.custom_form_data || {});
+      if (e.candidate?.id && e.custom_form_data?.elegido !== false) {
+        enrollmentMap.set(e.candidate.id, e.custom_form_data || {});
+      }
     });
 
     return applications.map(app => {
