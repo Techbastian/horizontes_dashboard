@@ -26,3 +26,22 @@ export const TIPO_OPCIONES = [
 
 const TIPO_LABEL = Object.fromEntries(TIPO_OPCIONES.map((t) => [t.value, t.label]));
 export const tipoLabel = (v) => TIPO_LABEL[v] || v;
+
+// Grupos concretos con participantes (excluye "Compartido", que se desglosa).
+export const GRUPOS_PARTICIPANTES = ['Junior', 'Senior', 'Activación'];
+
+// Mapea el tipo[] de un evento al tipo de session_attendance ('cafe' | 'sesion')
+// o null si el evento no lleva asistencia (evaluación, proyecto, evento…).
+export function attendanceTipo(event) {
+  const t = Array.isArray(event?.tipo) ? event.tipo : [];
+  if (t.includes('cafe')) return 'cafe';
+  if (t.includes('sesion') || t.includes('nivelacion')) return 'sesion';
+  return null;
+}
+
+// Grupos a mostrar en el panel de asistencia de un evento.
+// "Compartido" (cafés) → los 3 grupos en pestañas; el resto → su propio grupo.
+export function gruposDeAsistencia(event) {
+  if (event?.grupo === 'Compartido') return GRUPOS_PARTICIPANTES;
+  return event?.grupo ? [event.grupo] : [];
+}

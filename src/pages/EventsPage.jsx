@@ -8,7 +8,8 @@ import {
   isoToBogotaDate,
 } from '../lib/bogotaTime';
 import EventEditorModal from '../components/EventEditorModal';
-import { GRUPOS, GRUPO_CLASS, tipoLabel } from '../lib/eventos';
+import EventAttendanceModal from '../components/EventAttendanceModal';
+import { GRUPOS, GRUPO_CLASS, tipoLabel, attendanceTipo } from '../lib/eventos';
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -70,6 +71,7 @@ export default function EventsPage({ cohort }) {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
+  const [attendanceEvent, setAttendanceEvent] = useState(null);
 
   const calendarCells = useMemo(
     () => buildCalendarCells(viewYear, viewMonth0),
@@ -373,18 +375,32 @@ export default function EventsPage({ cohort }) {
                         {ev.descripcion && (
                           <span className="events-day-item-desc">{ev.descripcion}</span>
                         )}
-                        {ev.evidencia_url && (
-                          <button
-                            type="button"
-                            className="events-day-item-evidence"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(ev.evidencia_url, '_blank', 'noopener,noreferrer');
-                            }}
-                          >
-                            Abrir evidencia
-                          </button>
-                        )}
+                        <div className="events-day-item-actions">
+                          {attendanceTipo(ev) && (
+                            <button
+                              type="button"
+                              className="events-day-item-attendance"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAttendanceEvent(ev);
+                              }}
+                            >
+                              Tomar asistencia
+                            </button>
+                          )}
+                          {ev.evidencia_url && (
+                            <button
+                              type="button"
+                              className="events-day-item-evidence"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(ev.evidencia_url, '_blank', 'noopener,noreferrer');
+                              }}
+                            >
+                              Abrir evidencia
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -406,6 +422,14 @@ export default function EventsPage({ cohort }) {
           }}
           onSaved={() => loadEvents()}
           onDeleted={() => loadEvents()}
+        />
+      )}
+
+      {attendanceEvent && (
+        <EventAttendanceModal
+          cohortId={cohortId}
+          event={attendanceEvent}
+          onClose={() => setAttendanceEvent(null)}
         />
       )}
     </div>

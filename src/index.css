@@ -1734,6 +1734,165 @@ body {
   color: #ffffff;
 }
 
+/* ── Acciones por evento (lista del día) ──────────────────────────────────── */
+.events-day-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 4px;
+}
+
+.events-day-item-attendance {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-teal);
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Panel de asistencia por evento ───────────────────────────────────────── */
+.event-attendance-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: 88vh;
+}
+
+.event-attendance-modal .modal-body {
+  overflow-y: auto;
+}
+
+.attendance-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.attendance-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.attendance-tab.is-active {
+  border-color: var(--grp-color, var(--accent-teal));
+  background: var(--grp-dim, var(--bg-card-hover));
+  color: var(--text-primary);
+}
+
+.attendance-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 8px;
+  position: sticky;
+  top: 0;
+  background: var(--bg-card);
+  z-index: 1;
+}
+
+.attendance-summary strong {
+  color: var(--accent-teal);
+  font-size: 16px;
+}
+
+.attendance-bulk {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.attendance-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.attendance-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.attendance-row:hover {
+  background: var(--bg-secondary);
+}
+
+.attendance-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.attendance-check input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent-teal);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.attendance-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attendance-obs {
+  width: 190px;
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+
+@media (max-width: 560px) {
+  .attendance-row {
+    flex-wrap: wrap;
+  }
+  .attendance-obs {
+    width: 100%;
+  }
+}
+
 .events-day-modal {
   max-width: 480px;
 }

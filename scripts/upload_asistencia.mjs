@@ -357,13 +357,17 @@ async function main() {
     console.log(`\n   ⚠️  Tabla session_attendance NO existe todavía — omito la carga de asistencia detallada.`);
     console.log(`       Ejecuta scripts/migracion_session_attendance.sql en el SQL Editor y vuelve a correr con --commit.`);
   } else {
-    await supabase.from('session_attendance').delete().eq('cohort_id', cohortId);
+    // Upsert NO destructivo (por la clave única): actualiza/inserta sin borrar.
+    // No incluye `evento_id`, así que preserva los vínculos y la asistencia
+    // capturada desde la app (Fase 2). Ya no hace delete del cohort completo.
     for (let i = 0; i < plan.attendanceRows.length; i += 200) {
       const batch = plan.attendanceRows.slice(i, i + 200);
-      const { error } = await supabase.from('session_attendance').insert(batch);
+      const { error } = await supabase
+        .from('session_attendance')
+        .upsert(batch, { onConflict: 'cohort_id,candidate_id,grupo,tipo,actividad' });
       if (error) console.warn(`   ⚠️ asistencia batch ${i}: ${error.message}`);
     }
-    console.log(`   ✅ ${plan.attendanceRows.length} filas de asistencia cargadas`);
+    console.log(`   ✅ ${plan.attendanceRows.length} filas de asistencia upsertadas (no destructivo)`);
   }
 
   console.log(`\n🎉 Carga completada.\n`);
