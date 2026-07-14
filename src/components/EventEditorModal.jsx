@@ -6,6 +6,7 @@ import {
   bogotaDateTimeToIso,
   bogotaPlusDays,
 } from '../lib/bogotaTime';
+import { GRUPOS, TIPO_OPCIONES } from '../lib/eventos';
 
 export default function EventEditorModal({
   cohortId,
@@ -19,6 +20,9 @@ export default function EventEditorModal({
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [evidenciaUrl, setEvidenciaUrl] = useState('');
+  const [grupo, setGrupo] = useState('Compartido');
+  const [codigo, setCodigo] = useState('');
+  const [tipos, setTipos] = useState([]);
   const [fechaDia, setFechaDia] = useState(selectedDateKey);
   const [horaInicio, setHoraInicio] = useState('09:00');
   const [horaFin, setHoraFin] = useState('10:00');
@@ -30,6 +34,9 @@ export default function EventEditorModal({
       setNombre(event.nombre || '');
       setDescripcion(event.descripcion || '');
       setEvidenciaUrl(event.evidencia_url || '');
+      setGrupo(event.grupo || 'Compartido');
+      setCodigo(event.codigo || '');
+      setTipos(Array.isArray(event.tipo) ? event.tipo : []);
       setFechaDia(isoToBogotaDate(event.fecha_hora_inicio));
       setHoraInicio(isoToBogotaTime(event.fecha_hora_inicio));
       setHoraFin(isoToBogotaTime(event.fecha_hora_fin));
@@ -37,11 +44,17 @@ export default function EventEditorModal({
       setNombre('');
       setDescripcion('');
       setEvidenciaUrl('');
+      setGrupo('Compartido');
+      setCodigo('');
+      setTipos([]);
       setFechaDia(selectedDateKey);
       setHoraInicio('09:00');
       setHoraFin('10:00');
     }
   }, [event, selectedDateKey]);
+
+  const toggleTipo = (value) =>
+    setTipos((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]));
 
   const computeInicioFinIso = () => {
     let inicio;
@@ -78,6 +91,9 @@ export default function EventEditorModal({
         nombre: n,
         descripcion: descripcion.trim() || null,
         evidencia_url: evidenciaUrl.trim() || null,
+        grupo: grupo || null,
+        codigo: codigo.trim() || null,
+        tipo: tipos.length ? tipos : null,
         fecha_hora_inicio: times.inicio,
         fecha_hora_fin: times.fin,
       };
@@ -169,9 +185,56 @@ export default function EventEditorModal({
                   style={{ width: '100%' }}
                   value={evidenciaUrl}
                   onChange={(e) => setEvidenciaUrl(e.target.value)}
-                  placeholder="https://..."
+                  placeholder="Carpeta de Drive o documentos en Supabase (https://...)"
                 />
               </label>
+            </div>
+          </div>
+
+          <div className="modal-section">
+            <div className="modal-section-title">Clasificación</div>
+            <div className="event-form-stack">
+              <div className="event-form-row">
+                <label className="event-form-label">
+                  Grupo
+                  <select
+                    className="modal-action-input"
+                    value={grupo}
+                    onChange={(e) => setGrupo(e.target.value)}
+                  >
+                    {GRUPOS.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="event-form-label">
+                  Código
+                  <input
+                    type="text"
+                    className="modal-action-input"
+                    value={codigo}
+                    onChange={(e) => setCodigo(e.target.value)}
+                    placeholder="Opcional · ej. V-J03"
+                  />
+                </label>
+              </div>
+              <div className="event-form-label" style={{ textTransform: 'none' }}>
+                Tipo de actividad (uno o más)
+                <div className="event-tipo-chips">
+                  {TIPO_OPCIONES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      className={`event-tipo-chip${tipos.includes(t.value) ? ' is-selected' : ''}`}
+                      onClick={() => toggleTipo(t.value)}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

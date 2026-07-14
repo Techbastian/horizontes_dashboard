@@ -4,7 +4,10 @@
       "PowerShell(Get-ChildItem -Path \"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\" -Recurse -Directory -Depth 3 | Select-Object -ExpandProperty FullName | ForEach-Object { $_ -replace [regex]::Escape\\(\"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\"\\), \".\" } | Sort-Object)",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\\\\src\" -Recurse -File | Select-Object -ExpandProperty FullName | ForEach-Object { $_ -replace [regex]::Escape\\(\"C:\\\\Disruptia\\\\Automatizaciones\\\\Construccion de Dashboards\\\\horizontes-dashboard\\\\src\"\\), \"\" })",
       "Bash(node scripts/upload_formacion.mjs)",
-      "Bash(node scripts/sync_lista_definitiva.mjs)"
+      "Bash(node scripts/sync_lista_definitiva.mjs)",
+      "Bash(cp \"C:/Users/USUARIO/AppData/Local/Temp/claude/C--Disruptia-Automatizaciones-Construccion-de-Dashboards-horizontes-dashboard/df236aad-59d5-4066-8605-d0c955a3a727/scratchpad/inspect_crono.mjs\" ./_tmp_inspect.mjs)",
+      "Bash(node ./_tmp_inspect.mjs)",
+      "Bash(rm -f ./_tmp_inspect.mjs)"
     ]
   }
 }

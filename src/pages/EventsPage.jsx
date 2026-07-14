@@ -8,6 +8,7 @@ import {
   isoToBogotaDate,
 } from '../lib/bogotaTime';
 import EventEditorModal from '../components/EventEditorModal';
+import { GRUPOS, GRUPO_CLASS, tipoLabel } from '../lib/eventos';
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -63,6 +64,7 @@ export default function EventsPage({ cohort }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [grupoFilter, setGrupoFilter] = useState('Todos');
 
   const [selectedDayKey, setSelectedDayKey] = useState(null);
 
@@ -104,23 +106,41 @@ export default function EventsPage({ cohort }) {
 
   const todayKey = isoToBogotaDate(new Date().toISOString());
 
-  const eventCountByDay = useMemo(() => {
+  // Al filtrar por un grupo concreto se incluyen también los eventos
+  // "Compartido" (aplican a todos los grupos). "Compartido" solo muestra esos.
+  const matchesGrupo = useCallback(
+    (ev) => {
+      if (grupoFilter === 'Todos') return true;
+      if (ev.grupo === grupoFilter) return true;
+      return grupoFilter !== 'Compartido' && ev.grupo === 'Compartido';
+    },
+    [grupoFilter]
+  );
+
+  const filteredEvents = useMemo(() => events.filter(matchesGrupo), [events, matchesGrupo]);
+
+  // Grupos con evento en cada día → un punto de color por grupo.
+  const gruposByDay = useMemo(() => {
     const uniq = [...new Set(calendarCells.map((c) => c.dateKey))];
     const map = {};
     for (const dk of uniq) {
-      map[dk] = events.filter((ev) =>
-        overlapsBogotaDay(ev.fecha_hora_inicio, ev.fecha_hora_fin, dk)
-      ).length;
+      const grupos = new Set();
+      for (const ev of filteredEvents) {
+        if (overlapsBogotaDay(ev.fecha_hora_inicio, ev.fecha_hora_fin, dk)) {
+          grupos.add(ev.grupo || 'Compartido');
+        }
+      }
+      map[dk] = [...grupos];
     }
     return map;
-  }, [calendarCells, events]);
+  }, [calendarCells, filteredEvents]);
 
   const eventsForSelectedDay = useMemo(() => {
     if (!selectedDayKey) return [];
-    return events
+    return filteredEvents
       .filter((ev) => overlapsBogotaDay(ev.fecha_hora_inicio, ev.fecha_hora_fin, selectedDayKey))
       .sort((a, b) => new Date(a.fecha_hora_inicio) - new Date(b.fecha_hora_inicio));
-  }, [events, selectedDayKey]);
+  }, [filteredEvents, selectedDayKey]);
 
   const monthTitle = cursor.toLocaleString('es-CO', {
     month: 'long',
@@ -183,6 +203,22 @@ export default function EventsPage({ cohort }) {
           </button>
         </div>
 
+        <div className="events-group-filters">
+          {['Todos', ...GRUPOS].map((g) => (
+            <button
+              key={g}
+              type="button"
+              className={`events-group-chip${
+                g !== 'Todos' ? ` ${GRUPO_CLASS[g]}` : ''
+              }${grupoFilter === g ? ' is-active' : ''}`}
+              onClick={() => setGrupoFilter(g)}
+            >
+              {g !== 'Todos' && <span className="events-group-chip-dot" />}
+              {g}
+            </button>
+          ))}
+        </div>
+
         {error && (
           <div className="error-message" style={{ marginBottom: 16 }}>
             {error}{' '}
@@ -208,12 +244,14 @@ export default function EventsPage({ cohort }) {
               onClick={() => setSelectedDayKey(cell.dateKey)}
             >
               <span className="events-calendar-dom">{cell.dom}</span>
-              {(eventCountByDay[cell.dateKey] || 0) > 0 && (
+              {(gruposByDay[cell.dateKey]?.length || 0) > 0 && (
                 <span className="events-calendar-dots">
-                  {Array.from({
-                    length: Math.min(eventCountByDay[cell.dateKey] || 0, 3),
-                  }).map((_, i) => (
-                    <span key={i} className="events-calendar-dot" />
+                  {gruposByDay[cell.dateKey].map((g) => (
+                    <span
+                      key={g}
+                      className={`events-calendar-dot ${GRUPO_CLASS[g] || 'grp-compartido'}`}
+                      title={g}
+                    />
                   ))}
                 </span>
               )}
@@ -305,6 +343,27 @@ export default function EventsPage({ cohort }) {
                         }}
                       >
                         <span className="events-day-item-title">{ev.nombre}</span>
+                        {(ev.grupo || ev.codigo || (ev.tipo && ev.tipo.length > 0)) && (
+                          <span className="events-day-item-badges">
+                            {ev.grupo && (
+                              <span
+                                className={`events-badge events-badge-grupo ${
+                                  GRUPO_CLASS[ev.grupo] || 'grp-compartido'
+                                }`}
+                              >
+                                {ev.grupo}
+                              </span>
+                            )}
+                            {ev.codigo && (
+                              <span className="events-badge events-badge-codigo">{ev.codigo}</span>
+                            )}
+                            {(ev.tipo || []).map((t) => (
+                              <span key={t} className="events-badge events-badge-tipo">
+                                {tipoLabel(t)}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                         <span className="events-day-item-meta">
                           {isoToBogotaDate(ev.fecha_hora_inicio) ===
                           isoToBogotaDate(ev.fecha_hora_fin)

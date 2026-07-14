@@ -1596,10 +1596,142 @@ body {
 }
 
 .events-calendar-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--accent-teal-light);
+  background: var(--grp-color, var(--accent-teal-light));
+}
+
+/* ── Colores por grupo (Eventos) ─────────────────────────────────────────── */
+.grp-junior {
+  --grp-color: var(--accent-violet);
+  --grp-dim: var(--accent-violet-dim);
+}
+.grp-senior {
+  --grp-color: var(--accent-teal);
+  --grp-dim: rgba(13, 148, 136, 0.15);
+}
+.grp-activacion {
+  --grp-color: var(--accent-amber);
+  --grp-dim: var(--accent-amber-dim);
+}
+.grp-compartido {
+  --grp-color: var(--accent-slate);
+  --grp-dim: rgba(100, 116, 139, 0.15);
+}
+
+/* ── Filtros por grupo ────────────────────────────────────────────────────── */
+.events-group-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.events-group-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.events-group-chip:hover {
+  border-color: var(--border-active);
+}
+
+.events-group-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--grp-color, var(--text-muted));
+}
+
+.events-group-chip.is-active {
+  border-color: var(--grp-color, var(--accent-teal));
+  background: var(--grp-dim, var(--bg-card-hover));
+  color: var(--text-primary);
+}
+
+/* ── Badges de evento (grupo / código / tipo) ─────────────────────────────── */
+.events-day-item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.events-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.events-badge-grupo {
+  background: var(--grp-dim, rgba(100, 116, 139, 0.15));
+  color: var(--grp-color, var(--text-secondary));
+  border: 1px solid var(--grp-color, var(--border-light));
+}
+
+.events-badge-codigo {
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+
+.events-badge-tipo {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Selector multi-tipo (modal) ──────────────────────────────────────────── */
+.event-tipo-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.event-tipo-chip {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.event-tipo-chip:hover {
+  border-color: var(--border-active);
+}
+
+.event-tipo-chip.is-selected {
+  border-color: var(--accent-teal);
+  background: var(--accent-teal);
+  color: #ffffff;
 }
 
 .events-day-modal {
