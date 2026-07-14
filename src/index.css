@@ -8,14 +8,14 @@
 }
 
 :root {
-  /* Backgrounds */
-  --bg-primary: #020617;
-  --bg-secondary: #0f172a;
-  --bg-card: #1a1f37;
-  --bg-card-hover: #242b47;
-  --bg-sidebar: #0c1023;
-  --bg-input: #151b33;
-  --bg-overlay: rgba(2, 6, 23, 0.85);
+  /* Backgrounds — tema claro */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-sidebar: #ffffff;
+  --bg-input: #ffffff;
+  --bg-overlay: rgba(15, 23, 42, 0.5);
 
   /* Accent Colors */
   --accent-teal: #0d9488;
@@ -38,20 +38,20 @@
   --accent-cyan: #06b6d4;
   --accent-slate: #64748b;
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
+  /* Text — oscuro sobre claro */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
   --text-muted: #64748b;
   --text-accent: #0d9488;
 
-  /* Borders */
-  --border-subtle: rgba(148, 163, 184, 0.08);
-  --border-light: rgba(148, 163, 184, 0.15);
+  /* Borders — sutiles oscuros sobre claro */
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-light: rgba(15, 23, 42, 0.12);
   --border-active: rgba(13, 148, 136, 0.4);
 
-  /* Shadows */
-  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.25);
-  --shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.35);
+  /* Shadows — suaves para tema claro */
+  --shadow-card: 0 4px 24px rgba(15, 23, 42, 0.06);
+  --shadow-hover: 0 8px 32px rgba(15, 23, 42, 0.10);
   --shadow-glow-teal: 0 0 20px rgba(13, 148, 136, 0.15);
   --shadow-glow-violet: 0 0 20px rgba(124, 58, 237, 0.15);
 
@@ -736,7 +736,7 @@ body {
 /* ===== TABLE ===== */
 .table-container {
   overflow-x: auto;
-  background: #0b1120; /* Very dark background for the container to create contrast */
+  background: #f1f5f9; /* Light background for the container to create contrast */
   padding: 12px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);

@@ -10,7 +10,7 @@ function progressColor(pct) {
 
 function ProgressBar({ pct, height = 6 }) {
   return (
-    <div style={{ background: '#1e293b', borderRadius: 99, height, overflow: 'hidden', flex: 1 }}>
+    <div style={{ background: '#e2e8f0', borderRadius: 99, height, overflow: 'hidden', flex: 1 }}>
       <div style={{
         width: `${Math.min(pct, 100)}%`,
         height: '100%',
@@ -27,7 +27,7 @@ function RouteTooltip({ routes }) {
     <div style={{
       position: 'absolute', zIndex: 100, bottom: '130%', left: '50%',
       transform: 'translateX(-50%)',
-      background: '#0f172a', border: '1px solid #334155',
+      background: '#f1f5f9', border: '1px solid #cbd5e1',
       borderRadius: 10, padding: '12px 14px', minWidth: 280,
       boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
       pointerEvents: 'none',
@@ -36,7 +36,7 @@ function RouteTooltip({ routes }) {
         const short = r.name.replace(/ Jr$| Sr$/, '');
         return (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: i < routes.length - 1 ? 8 : 0 }}>
-            <span style={{ fontSize: 11, color: '#94a3b8', width: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short}</span>
+            <span style={{ fontSize: 11, color: '#475569', width: 180, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{short}</span>
             <ProgressBar pct={r.pct} height={5} />
             <span style={{ fontSize: 11, fontWeight: 700, color: progressColor(r.pct), width: 36, textAlign: 'right' }}>{r.pct}%</span>
           </div>
@@ -58,7 +58,7 @@ function ParticipantRow({ p, index }) {
         gap: 12,
         padding: '8px 12px',
         borderRadius: 8,
-        background: hover ? '#1a2035' : 'transparent',
+        background: hover ? '#ffffff' : 'transparent',
         transition: 'background 0.15s',
         opacity: p.isActive ? 1 : 0.5,
       }}
@@ -70,7 +70,7 @@ function ParticipantRow({ p, index }) {
 
       {/* Name */}
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {p.name}
         </div>
         <div style={{ fontSize: 11, color: '#64748b' }}>{p.email}</div>
@@ -133,7 +133,7 @@ export default function FormationProgressSection({ formationProgress }) {
       {/* Section title */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Nivelación — Progreso de Formación</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>Nivelación — Progreso de Formación</h2>
           <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Avance individual por ruta. Hover sobre la barra para ver detalle por módulo.</p>
         </div>
       </div>
@@ -164,8 +164,8 @@ export default function FormationProgressSection({ formationProgress }) {
             {Object.entries(distribution).map(([label, count]) => (
               <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: distColors[label], flexShrink: 0 }} />
-                <span style={{ fontSize: 12, color: '#94a3b8', flex: 1 }}>{label}</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{count}</span>
+                <span style={{ fontSize: 12, color: '#475569', flex: 1 }}>{label}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>{count}</span>
               </div>
             ))}
           </div>
@@ -175,15 +175,15 @@ export default function FormationProgressSection({ formationProgress }) {
       {/* Table card */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {/* Table header / controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid #1e293b' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', borderBottom: '1px solid #e2e8f0' }}>
           <input
             type="text"
             placeholder="Buscar participante..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{
-              background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-              padding: '6px 12px', fontSize: 13, color: '#f1f5f9', outline: 'none', width: 220,
+              background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 8,
+              padding: '6px 12px', fontSize: 13, color: '#0f172a', outline: 'none', width: 220,
             }}
           />
           <div style={{ display: 'flex', gap: 6 }}>
@@ -194,8 +194,8 @@ export default function FormationProgressSection({ formationProgress }) {
                 style={{
                   padding: '5px 14px', borderRadius: 99, fontSize: 12, fontWeight: 600,
                   border: 'none', cursor: 'pointer',
-                  background: filter === f ? '#334155' : 'transparent',
-                  color: filter === f ? '#f1f5f9' : '#64748b',
+                  background: filter === f ? '#cbd5e1' : 'transparent',
+                  color: filter === f ? '#0f172a' : '#64748b',
                 }}
               >
                 {f.charAt(0).toUpperCase() + f.slice(1)}
@@ -209,7 +209,7 @@ export default function FormationProgressSection({ formationProgress }) {
         <div style={{
           display: 'grid', gridTemplateColumns: '28px 1fr 48px 180px 64px 72px',
           gap: 12, padding: '6px 12px',
-          borderBottom: '1px solid #1e293b',
+          borderBottom: '1px solid #e2e8f0',
         }}>
           {['#', 'Participante', 'Ruta', 'Progreso por módulos', '%', 'Estado'].map(h => (
             <span key={h} style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === '#' ? 'right' : undefined }}>{h}</span>

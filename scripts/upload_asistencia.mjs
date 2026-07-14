@@ -22,6 +22,11 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Horizontes_Senior_Matriz_Maestra_VF.xlsx');
 const YEAR = 2026;
 
+// Fechas oficiales de los cafés de conocimiento (presenciales, compartidos Junior+Senior+Activación),
+// tomadas del cronograma V9 (hoja "Matriz de horarios"). Keyed por número de café.
+// Permiten aplicar la misma regla de "gris si no ha pasado" que a las sesiones.
+const CAFE_FECHAS = { 1: '2026-05-21', 2: '2026-06-23', 3: '2026-07-23', 4: '2026-08-26', 5: '2026-09-24', 6: '2026-10-22' };
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const norm = (d) => String(d ?? '').replace(/\D/g, '').trim();
 const lc = (s) => String(s ?? '').toLowerCase().trim();
@@ -63,17 +68,23 @@ function parseSeguimiento(wb, sheetName, grupo) {
     const doc = norm(r['Número de Documento']);
     if (!doc) continue;
     const sesiones = [], cafes = [], entregables = [];
-    let obs = null;
+    // Una columna "Observaci..." pertenece a la actividad que la precede en el Excel.
+    // Ej: "Observaciones Sesion 06/07" queda pegada a la sesión 06/07 (no a todas las sesiones).
+    let lastActivity = null;
     for (const [col, val] of Object.entries(r)) {
       if (/^__empty/i.test(col)) continue;
       if (/^sesi[oó]n/i.test(col)) {
-        sesiones.push({ actividad: col.trim(), fecha: extractDate(col), asistio: parseAttendanceValue(val) });
+        lastActivity = { actividad: col.trim(), fecha: extractDate(col), asistio: parseAttendanceValue(val), observacion: null };
+        sesiones.push(lastActivity);
       } else if (/^caf[eé]/i.test(col)) {
-        cafes.push({ actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val) });
+        const numCafe = parseInt(String(col).match(/\d+/)?.[0], 10);
+        lastActivity = { actividad: col.trim(), fecha: CAFE_FECHAS[numCafe] || null, asistio: parseAttendanceValue(val), observacion: null };
+        cafes.push(lastActivity);
       } else if (/^entregable/i.test(col)) {
-        entregables.push({ actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val) });
-      } else if (/^observaci/i.test(col) && val) {
-        obs = String(val).trim();
+        lastActivity = { actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val), observacion: null };
+        entregables.push(lastActivity);
+      } else if (/^observaci/i.test(col)) {
+        if (val && lastActivity) lastActivity.observacion = String(val).trim();
       }
     }
     const num = (v) => { const n = parseFloat(String(v).replace(',', '.')); return Number.isNaN(n) ? null : n; };
@@ -83,7 +94,6 @@ function parseSeguimiento(wb, sheetName, grupo) {
       name: (r['Nombre Completo'] || '').trim(),
       grupo,
       sesiones, cafes, entregables,
-      observacion: obs,
       pond_sesiones: num(r['Ponderado Asistencia sesiones 35%']),
       pond_cafes: num(r['Ponderado asistencia cafés 40%']),
       pond_entregables: num(r['Ponderado entregables 25%']),
@@ -222,13 +232,13 @@ async function main() {
       plan.insertEnrollments.push({ candidateId, grupo: p.grupo, custom, attendance_percentage, doc: p.doc, name: p.name });
     }
 
-    // Filas de asistencia
-    // Motivos de inasistencia a cafés vienen de la Matriz Maestra (Café 1 y Café 2)
+    // Filas de asistencia. Cada actividad lleva su propia observación (viene pegada a su columna
+    // en la hoja de seguimiento). Para cafés, el motivo de la Matriz Maestra (Café 1 y 2) tiene prioridad.
     const cafeMotivos = { 1: m?.motivo_cafe_1 || null, 2: m?.motivo_cafe_2 || null };
     const push = (tipo, arr) => arr.forEach((a, i) => plan.attendanceRows.push({
       cohort_id: cohortId, candidate_id: candidateId, grupo: p.grupo,
       tipo, actividad: a.actividad, fecha: a.fecha, orden: i + 1, asistio: a.asistio,
-      observacion: tipo === 'sesion' ? p.observacion : (tipo === 'cafe' ? (cafeMotivos[i + 1] || null) : null),
+      observacion: tipo === 'cafe' ? (cafeMotivos[i + 1] || a.observacion || null) : (a.observacion || null),
     }));
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
   }

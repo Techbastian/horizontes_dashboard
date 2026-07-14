@@ -230,20 +230,26 @@ export function useApplicationsData() {
     return { participants, active, inactive, globalAvg, distribution };
   }, [courseStatus, coursesList, enrollments]);
 
-  // Actividades que YA ocurrieron. Una actividad ocurrió si:
-  //   • tiene fecha y esa fecha ya pasó (o es hoy)  → sesiones
-  //   • no tiene fecha pero al menos alguien asistió → cafés/entregables (los futuros están en 0 para todo el grupo)
+  // Actividades que YA ocurrieron (cuentan en el %). Una actividad "ocurrió" si:
+  //   • sesiones y cafés → tienen fecha y esa fecha ya pasó (o es hoy); las futuras van en gris y NO cuentan.
+  //   • entregables → cuentan una vez que el grupo ya arrancó a entregar (al menos alguien entregó):
+  //     entregado = 100%, pendiente = 0%. Mientras nadie del grupo haya entregado (p.ej. Activación
+  //     al inicio), el entregable se excluye para no penalizar por algo que aún no aplica; se auto-activa
+  //     con la primera entrega.
+  //   • fallback sin fecha → si al menos alguien asistió.
   const occurredActivities = useMemo(() => {
     const agg = {};
     sessionAttendance.forEach(r => {
       const k = `${r.grupo}|${r.tipo}|${r.actividad}`;
-      if (!agg[k]) agg[k] = { fecha: r.fecha, anyAttended: false };
+      if (!agg[k]) agg[k] = { tipo: r.tipo, fecha: r.fecha, anyAttended: false };
       if (r.asistio === true) agg[k].anyAttended = true;
     });
     const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
     const set = new Set();
     Object.entries(agg).forEach(([k, v]) => {
-      const ocurrio = v.fecha ? (new Date(v.fecha) <= hoy) : v.anyAttended;
+      const ocurrio = v.tipo === 'entregable'
+        ? v.anyAttended
+        : (v.fecha ? (new Date(v.fecha) <= hoy) : v.anyAttended);
       if (ocurrio) set.add(k);
     });
     return set;

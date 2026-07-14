@@ -56,7 +56,7 @@ export default function RetirosPage({ retiros, metrics }) {
             {catOrdenadas.map(([cat, n]) => (
               <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ fontSize: 13, color: 'var(--text-secondary)', width: 190, flexShrink: 0 }}>{cat}</span>
-                <div style={{ flex: 1, background: '#1e293b', borderRadius: 99, height: 22, overflow: 'hidden' }}>
+                <div style={{ flex: 1, background: '#e2e8f0', borderRadius: 99, height: 22, overflow: 'hidden' }}>
                   <div style={{ width: `${(n / maxCat) * 100}%`, height: '100%', background: CAT_COLORS[cat] || '#64748b', borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{n}</span>
                   </div>
@@ -96,7 +96,7 @@ export default function RetirosPage({ retiros, metrics }) {
                     <span className="badge" style={{ background: `${nivelColor(c.nivel)}22`, color: nivelColor(c.nivel), fontWeight: 700 }}>{/senior/i.test(c.nivel) ? 'Senior' : 'Junior'}</span>
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4 }}>
-                    <span className="badge" style={{ background: `${CAT_COLORS[c.categoria] || '#64748b'}22`, color: CAT_COLORS[c.categoria] || '#94a3b8', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.categoria}</span>
+                    <span className="badge" style={{ background: `${CAT_COLORS[c.categoria] || '#64748b'}22`, color: CAT_COLORS[c.categoria] || '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.categoria}</span>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.motivo}</div>
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4, fontSize: 13, color: 'var(--text-secondary)' }}>{fmtFecha(c.fecha)}</td>
@@ -131,20 +131,20 @@ export default function RetirosPage({ retiros, metrics }) {
       {selected && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,6,23,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
           onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
-          <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div><div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>{selected.nombre}</div><div style={{ fontSize: 13, color: '#64748b' }}>{selected.email}</div></div>
+          <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div><div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{selected.nombre}</div><div style={{ fontSize: 13, color: '#64748b' }}>{selected.email}</div></div>
               <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span className="badge" style={{ background: `${CAT_COLORS[selected.categoria] || '#64748b'}22`, color: CAT_COLORS[selected.categoria] || '#94a3b8', fontWeight: 700 }}>{selected.categoria}</span>
+                <span className="badge" style={{ background: `${CAT_COLORS[selected.categoria] || '#64748b'}22`, color: CAT_COLORS[selected.categoria] || '#475569', fontWeight: 700 }}>{selected.categoria}</span>
                 <span className="badge" style={{ background: `${nivelColor(selected.nivel)}22`, color: nivelColor(selected.nivel), fontWeight: 700 }}>{/senior/i.test(selected.nivel) ? 'Senior' : 'Junior'}</span>
                 <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'center' }}>{fmtFecha(selected.fecha)}</span>
               </div>
               <div>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Motivo de retiro</div>
-                <div style={{ background: '#1a2035', borderRadius: 10, padding: '14px 16px', fontSize: 14, color: '#cbd5e1', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selected.motivo}</div>
+                <div style={{ background: '#ffffff', borderRadius: 10, padding: '14px 16px', fontSize: 14, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selected.motivo}</div>
               </div>
               {selected.evidencia && (
                 <a href={selected.evidencia} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#0d9488' }}>📎 Ver evidencia</a>

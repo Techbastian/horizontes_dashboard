@@ -94,7 +94,7 @@ export default function DonutChartWidget({ data, color, colors, centerLabel, cen
             textAlign: 'center',
             pointerEvents: 'none',
           }}>
-            <div style={{ fontSize: '22px', fontWeight: '800', color: '#f1f5f9' }}>{centerValue}</div>
+            <div style={{ fontSize: '22px', fontWeight: '800', color: '#0f172a' }}>{centerValue}</div>
           </div>
         )}
       </div>

@@ -20,7 +20,7 @@ function Bar({ pct, width = 90 }) {
   if (pct == null) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width, background: '#1e293b', borderRadius: 99, height: 6, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ width, background: '#e2e8f0', borderRadius: 99, height: 6, overflow: 'hidden', flexShrink: 0 }}>
         <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: progressColor(pct), borderRadius: 99, transition: 'width 0.5s ease' }} />
       </div>
       <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(pct), minWidth: 32 }}>{pct}%</span>
@@ -36,12 +36,17 @@ function AttendanceCells({ items, pct }) {
       {hasItems && (
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 156 }}>
           {items.map((it, i) => {
+            const isEntregable = it.tipo === 'entregable';
             const pending = it.occurred === false;             // aún no ocurre → neutro
             const attended = !pending && it.asistio === true;
             const missed = !pending && it.asistio === false;
-            const bg = pending ? '#0f172a' : attended ? '#10b98122' : missed ? '#ef444422' : '#1e293b';
-            const color = pending ? '#334155' : attended ? '#10b981' : missed ? '#ef4444' : '#475569';
-            const estado = pending ? 'Pendiente' : attended ? 'Asistió' : missed ? 'No asistió' : 'Sin registro';
+            const bg = pending ? '#f1f5f9' : attended ? '#10b98122' : missed ? '#ef444422' : '#e2e8f0';
+            const color = pending ? '#cbd5e1' : attended ? '#10b981' : missed ? '#ef4444' : '#475569';
+            // Entregables no tienen fecha: "Entregado" / "Pendiente" (pendiente cuenta 0%, va en rojo).
+            const estado = pending ? 'Pendiente'
+              : attended ? (isEntregable ? 'Entregado' : 'Asistió')
+              : missed ? (isEntregable ? 'Pendiente' : 'No asistió')
+              : 'Sin registro';
             return (
               <span key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
                 style={{ width: 19, height: 19, borderRadius: 4, background: bg, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
@@ -54,6 +59,23 @@ function AttendanceCells({ items, pct }) {
       <span style={{ fontSize: 12, fontWeight: 700, color: progressColor(pct), minWidth: 30, textAlign: 'right' }}>
         {pct == null ? '—' : `${pct}%`}
       </span>
+    </div>
+  );
+}
+
+// Leyenda de colores de asistencia (mismo esquema que AttendanceCells / AttendanceDots)
+function AttendanceLegend() {
+  const chip = (bg, color, ch, label) => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ width: 18, height: 18, borderRadius: 4, background: bg, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>{ch}</span>
+      <span style={{ fontSize: 11, color: '#475569' }}>{label}</span>
+    </span>
+  );
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      {chip('#10b98122', '#10b981', '✓', 'Asistió')}
+      {chip('#ef444422', '#ef4444', '✗', 'No asistió')}
+      {chip('#f1f5f9', '#cbd5e1', '·', 'Pendiente · aún no ocurre')}
     </div>
   );
 }
@@ -101,10 +123,10 @@ function AttendanceBarChart({ title, items, kind }) {
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end', minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#475569' : progressColor(s.pct) }}>{pending ? '—' : `${s.pct}%`}</span>
-              <div style={{ width: '100%', maxWidth: 46, background: '#1e293b', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: pending ? '6px' : `${s.pct}%`, background: pending ? '#334155' : progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
+              <div style={{ width: '100%', maxWidth: 46, background: '#e2e8f0', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: pending ? '6px' : `${s.pct}%`, background: pending ? '#cbd5e1' : progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
               </div>
-              <span style={{ fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap', fontWeight: kind === 'sesion' ? 600 : 400 }}>{label}</span>
+              <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', fontWeight: kind === 'sesion' ? 600 : 400 }}>{label}</span>
               <span style={{ fontSize: 9, color: '#475569' }}>{pending ? 'Pendiente' : `${s.asistieron}/${s.total}`}</span>
             </div>
           );
@@ -191,6 +213,16 @@ export default function FormationPage({ enrollments = [], formationProgress, att
     });
   }, [profiles, activeTab, search, showInactive]);
 
+  // Contexto de madurez del grupo activo: cuántas sesiones ya ocurrieron y hasta qué fecha
+  const sesInfo = useMemo(() => {
+    const ses = groupAttendance[activeTab]?.sesiones || [];
+    const realizadas = ses.filter(s => s.occurred).length;
+    const lastFecha = ses
+      .filter(s => s.occurred && s.fecha)
+      .reduce((max, s) => (!max || s.fecha > max) ? s.fecha : max, null);
+    return { realizadas, total: ses.length, lastFecha };
+  }, [groupAttendance, activeTab]);
+
   const meta = GROUP_META[activeTab];
   const st = groupStats[activeTab] || {};
 
@@ -233,8 +265,14 @@ export default function FormationPage({ enrollments = [], formationProgress, att
           <div style={{ display: 'flex', gap: 32 }}>
             <div><div style={{ fontSize: 12, color: '#64748b' }}>Asistencia a sesiones</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgSesiones) }}>{st.avgSesiones ?? '—'}%</div></div>
             <div><div style={{ fontSize: 12, color: '#64748b' }}>Total ponderado</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgTotal) }}>{st.avgTotal ?? '—'}%</div></div>
-            <div><div style={{ fontSize: 12, color: '#64748b' }}>Participantes</div><div style={{ fontSize: 30, fontWeight: 800, color: '#f1f5f9' }}>{st.activos ?? 0}</div></div>
+            <div><div style={{ fontSize: 12, color: '#64748b' }}>Sesiones realizadas</div><div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>{sesInfo.realizadas}<span style={{ fontSize: 16, color: '#475569', fontWeight: 600 }}>/{sesInfo.total}</span></div></div>
+            <div><div style={{ fontSize: 12, color: '#64748b' }}>Participantes</div><div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>{st.activos ?? 0}</div></div>
           </div>
+          {sesInfo.lastFecha && (
+            <div style={{ marginLeft: 'auto', textAlign: 'right', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+              Datos al<br /><span style={{ fontSize: 15, fontWeight: 700, color: '#475569' }}>{fechaCorta(sesInfo.lastFecha)}</span>
+            </div>
+          )}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <AttendanceBarChart title="Asistencia por sesión" items={groupAttendance[activeTab]?.sesiones} kind="sesion" />
@@ -255,7 +293,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 borderBottom: activeTab === tab ? `2px solid ${GROUP_META[tab].solid}` : '2px solid transparent',
                 borderRadius: 0, fontWeight: activeTab === tab ? 700 : 500,
                 display: 'flex', alignItems: 'center', gap: 8,
-                color: activeTab === tab ? '#f1f5f9' : '#64748b',
+                color: activeTab === tab ? '#0f172a' : '#64748b',
               }}
             >
               {GROUP_META[tab].label}
@@ -279,12 +317,17 @@ export default function FormationPage({ enrollments = [], formationProgress, att
             />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
               <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} />
               Mostrar inactivos
             </label>
             <span style={{ fontSize: 13, color: '#475569' }}>{filtered.length} participantes</span>
           </div>
+        </div>
+
+        {/* Leyenda de asistencia */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8 }}>
+          <AttendanceLegend />
         </div>
 
         {/* Tabla */}
