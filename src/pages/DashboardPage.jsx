@@ -62,6 +62,11 @@ export default function DashboardPage({ metrics, applications, formationProgress
         </div>
       </div>
 
+      {/* Meta del proyecto — 100 formados */}
+      {metrics.seleccionados && (
+        <MetaCard seleccionados={metrics.seleccionados} onNavigate={() => navigate('/formacion')} />
+      )}
+
       {/* KPI Cards */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <KPICard
@@ -501,6 +506,105 @@ export default function DashboardPage({ metrics, applications, formationProgress
                 })}
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Card estratégica de la meta del proyecto: 100 personas formadas.
+// Se basa SOLO en personas activas hoy (Senior + Junior, incluida Activación
+// que es nivel Junior). Los inactivos no cuentan hacia la meta.
+function MetaCard({ seleccionados, onNavigate }) {
+  const META = 100;
+  const activos = seleccionados.totalActivos || 0;
+  const margen = activos - META;
+  const cubierta = activos >= META;
+
+  // Escala del velocímetro con un poco de aire a la derecha del extremo mayor.
+  const scaleMax = Math.max(activos, META) + 8;
+  const clampPct = (n) => Math.max(0, Math.min(100, (n / scaleMax) * 100));
+  const pctMeta = `${clampPct(META)}%`;
+  const pctGoalSeg = `${clampPct(Math.min(activos, META))}%`;
+  const pctMargin = `${Math.max(0, ((activos - META) / scaleMax) * 100)}%`;
+
+  const rutas = [
+    { key: 'Senior', label: 'Senior', color: 'var(--accent-teal)' },
+    { key: 'Junior', label: 'Junior', color: 'var(--accent-violet)' },
+    { key: 'Activación', label: 'Activación', color: 'var(--accent-amber)' },
+  ];
+
+  return (
+    <div
+      className="card"
+      onClick={onNavigate}
+      style={{
+        cursor: 'pointer',
+        background: 'linear-gradient(135deg, rgba(124,58,237,0.06), rgba(13,148,136,0.06))',
+        borderColor: cubierta ? 'rgba(16,185,129,0.28)' : 'rgba(245,158,11,0.30)',
+      }}
+    >
+      {/* Encabezado */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-violet)', fontWeight: 700 }}>
+            🎯 Meta del proyecto
+          </div>
+          <div className="card-title" style={{ marginTop: 4 }}>Formación exitosa de 100 personas</div>
+          <div className="card-subtitle">Personas activas hoy en rutas Senior y Junior (incluye Activación). Los inactivos no cuentan.</div>
+        </div>
+        <div style={{
+          alignSelf: 'center',
+          padding: '8px 16px', borderRadius: 'var(--radius-full)', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+          background: cubierta ? 'var(--accent-emerald-dim)' : 'var(--accent-amber-dim)',
+          color: cubierta ? 'var(--accent-emerald)' : 'var(--accent-amber)',
+          border: `1px solid ${cubierta ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
+        }}>
+          {cubierta ? `✓ Meta cubierta · +${margen} de margen` : `⚠ Faltan ${META - activos} para asegurar la meta`}
+        </div>
+      </div>
+
+      {/* Número protagonista */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 64, fontWeight: 900, lineHeight: 1, color: cubierta ? 'var(--accent-emerald)' : 'var(--accent-amber)' }}>{activos}</span>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-muted)' }}>/ {META} meta</span>
+        <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-muted)' }}>{Math.round((activos / META) * 100)}% de la meta</span>
+      </div>
+
+      {/* Barra: tramo hasta la meta + tramo de margen, con marcador en 100 */}
+      <div style={{ position: 'relative', height: 18, marginTop: 22, marginBottom: 4 }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.06)', borderRadius: 'var(--radius-full)' }} />
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: pctGoalSeg,
+          background: cubierta ? 'linear-gradient(90deg, var(--accent-teal), var(--accent-emerald))' : 'linear-gradient(90deg, var(--accent-amber), #fbbf24)',
+          borderRadius: 'var(--radius-full)',
+        }} />
+        {cubierta && margen > 0 && (
+          <div style={{
+            position: 'absolute', left: pctMeta, top: 0, bottom: 0, width: pctMargin,
+            background: 'repeating-linear-gradient(45deg, rgba(16,185,129,0.45), rgba(16,185,129,0.45) 6px, rgba(16,185,129,0.22) 6px, rgba(16,185,129,0.22) 12px)',
+            borderTopRightRadius: 'var(--radius-full)', borderBottomRightRadius: 'var(--radius-full)',
+          }} />
+        )}
+        <div style={{ position: 'absolute', left: pctMeta, top: -6, bottom: -6, width: 2, background: 'var(--text-primary)', opacity: 0.55 }} />
+      </div>
+      <div style={{ position: 'relative', height: 16 }}>
+        <div style={{ position: 'absolute', left: pctMeta, transform: 'translateX(-50%)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+          Meta {META}
+        </div>
+      </div>
+
+      {/* Desglose por ruta + regla de lectura */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-light)' }}>
+        {rutas.map(r => (
+          <div key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderRadius: 'var(--radius-full)', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)' }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: r.color }} />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{r.label}</span>
+            <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>{seleccionados.activos[r.key] || 0}</strong>
+          </div>
+        ))}
+        <div style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-muted)' }}>
+          Mientras se mantengan ≥ {META} activos, la meta es alcanzable →
         </div>
       </div>
     </div>
