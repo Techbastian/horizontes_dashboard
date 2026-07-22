@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  calcularOcurridas,
+  calcularAsistenciaPorCandidato,
+  calcularAsistenciaPorGrupo,
+} from '../lib/asistencia';
 
 // Círculos de Conocimiento vive en su propia cohorte, fijada por slug (nunca por
 // status='active': la base aloja dos programas activos).
@@ -11,6 +16,10 @@ const CIRCULOS_COHORT_SLUG = 'circulos-de-conocimiento-i-2026';
 export function useCirculosData() {
   const [cohorte, setCohorte] = useState(null);
   const [participantes, setParticipantes] = useState([]);
+  const [enrollments, setEnrollments] = useState([]);
+  const [cursoEstado, setCursoEstado] = useState([]);
+  const [cursos, setCursos] = useState([]);
+  const [sessionAttendance, setSessionAttendance] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -33,10 +42,13 @@ export function useCirculosData() {
         .from('program_enrollments')
         .select(`
           id, status, custom_form_data,
-          candidate:candidates(id, first_name, last_name, email, phone, age, gender, birth_date, city, education_level)
+          candidate:candidates(id, first_name, last_name, email, phone, age, gender, birth_date, city, education_level, document_number)
         `)
         .eq('cohort_id', coh.id);
       if (enrErr) throw enrErr;
+      // Se guardan crudas además de la proyección `participantes`: la tabla de
+      // seguimiento en Formación arma sus perfiles desde esta misma forma.
+      setEnrollments(enrs || []);
 
       const { data: apps, error: appErr } = await supabase
         .from('project_applications')
@@ -57,6 +69,53 @@ export function useCirculosData() {
           .select('candidate_id, gender_identity, sexual_orientation, ethnicity, marital_status')
           .in('candidate_id', ids);
         socioPorCand = new Map((socio || []).map((s) => [s.candidate_id, s]));
+      }
+
+      // Asistencia sesión a sesión. Paginada de 1000 en 1000 como en el hook de HS:
+      // 263 participantes × 5 sesiones ya son 1315 filas, por encima del tope que
+      // devuelve PostgREST de una sola vez.
+      let todaLaAsistencia = [];
+      let pagina = 0;
+      const tamPagina = 1000;
+      let hayMas = true;
+      while (hayMas) {
+        const { data: sa, error: saErr } = await supabase
+          .from('session_attendance')
+          .select('candidate_id, grupo, tipo, actividad, fecha, orden, asistio, observacion')
+          .eq('cohort_id', coh.id)
+          .range(pagina * tamPagina, (pagina + 1) * tamPagina - 1);
+        if (saErr) {
+          console.warn('No se pudo cargar la asistencia de Círculos:', saErr.message);
+          break;
+        }
+        if (sa && sa.length) {
+          todaLaAsistencia = [...todaLaAsistencia, ...sa];
+          if (sa.length < tamPagina) hayMas = false;
+          else pagina++;
+        } else hayMas = false;
+      }
+      setSessionAttendance(todaLaAsistencia);
+
+      // Avance en plataforma. Mismo modelo que Horizontes Senior: una fila por
+      // (persona, curso) en cohort_course_status, con el título en
+      // education_library. Hoy viene vacío — se llena con el reporte de
+      // plataforma (bases_de_datos/reporte circulos de conocimiento.xlsx).
+      const { data: ccs, error: ccsErr } = await supabase
+        .from('cohort_course_status')
+        .select('candidate_id, course_id, percent_complete, is_active_enrollment')
+        .eq('cohort_id', coh.id);
+      if (ccsErr) console.warn('No se pudo cargar el avance en plataforma:', ccsErr.message);
+      setCursoEstado(ccs || []);
+
+      const cursoIds = [...new Set((ccs || []).map((r) => r.course_id).filter(Boolean))];
+      if (cursoIds.length) {
+        const { data: lib } = await supabase
+          .from('education_library')
+          .select('id, title')
+          .in('id', cursoIds);
+        setCursos(lib || []);
+      } else {
+        setCursos([]);
       }
 
       setParticipantes(
@@ -192,5 +251,91 @@ export function useCirculosData() {
     };
   }, [participantes]);
 
-  return { cohorte, participantes, metricas, loading, error, refetch: fetchData };
+  // Avance en plataforma con la misma forma que `formationProgress` de Horizontes
+  // Senior, para reutilizar <FormationProgressSection/> tal cual. Devuelve null
+  // mientras no haya ninguna fila cargada, y así la página muestra el estado vacío
+  // en vez de un 0% que se leería como "nadie ha avanzado".
+  const avancePlataforma = useMemo(() => {
+    if (!cursoEstado.length) return null;
+
+    const tituloPorCurso = Object.fromEntries(cursos.map((c) => [c.id, c.title]));
+    const datosPorPersona = new Map(participantes.map((p) => [p.candidateId, p]));
+
+    const porCandidato = {};
+    cursoEstado.forEach((fila) => {
+      if (!porCandidato[fila.candidate_id]) {
+        porCandidato[fila.candidate_id] = { activo: Boolean(fila.is_active_enrollment), rutas: [] };
+      }
+      porCandidato[fila.candidate_id].rutas.push({
+        courseId: fila.course_id,
+        name: tituloPorCurso[fila.course_id] || fila.course_id,
+        pct: typeof fila.percent_complete === 'number' ? fila.percent_complete : 0,
+      });
+      if (fila.is_active_enrollment) porCandidato[fila.candidate_id].activo = true;
+    });
+
+    const participants = Object.entries(porCandidato)
+      .map(([candidateId, d]) => {
+        const persona = datosPorPersona.get(candidateId);
+        const rutas = [...d.rutas].sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        const promedio = rutas.length
+          ? rutas.reduce((s, r) => s + r.pct, 0) / rutas.length
+          : 0;
+        return {
+          candidateId,
+          name: persona?.nombre || 'Desconocido',
+          email: persona?.email || '',
+          track: 'Círculos',
+          // El estado activo manda el de la matrícula, que es el que edita el
+          // equipo; el de la plataforma solo se usa si la persona no está en la lista.
+          isActive: persona ? persona.activo : d.activo,
+          avgProgress: Math.round(promedio * 10) / 10,
+          routes: rutas,
+        };
+      })
+      .sort((a, b) => b.avgProgress - a.avgProgress);
+
+    const active = participants.filter((p) => p.isActive);
+    const inactive = participants.filter((p) => !p.isActive);
+    const globalAvg = active.length
+      ? Math.round((active.reduce((s, p) => s + p.avgProgress, 0) / active.length) * 10) / 10
+      : 0;
+
+    const distribution = { '0–25%': 0, '25–50%': 0, '50–75%': 0, '75–100%': 0 };
+    active.forEach((p) => {
+      if (p.avgProgress < 25) distribution['0–25%']++;
+      else if (p.avgProgress < 50) distribution['25–50%']++;
+      else if (p.avgProgress < 75) distribution['50–75%']++;
+      else distribution['75–100%']++;
+    });
+
+    return { participants, active, inactive, globalAvg, distribution };
+  }, [cursoEstado, cursos, participantes]);
+
+  // Mismas formas que expone useApplicationsData, calculadas con el mismo módulo,
+  // para que la tabla de Formación no tenga que saber de qué programa viene.
+  const occurredActivities = useMemo(() => calcularOcurridas(sessionAttendance), [sessionAttendance]);
+
+  const attendanceByCandidate = useMemo(
+    () => calcularAsistenciaPorCandidato(sessionAttendance, occurredActivities),
+    [sessionAttendance, occurredActivities]
+  );
+
+  const groupAttendance = useMemo(
+    () => calcularAsistenciaPorGrupo(sessionAttendance, occurredActivities),
+    [sessionAttendance, occurredActivities]
+  );
+
+  return {
+    cohorte,
+    participantes,
+    enrollments,
+    metricas,
+    avancePlataforma,
+    attendanceByCandidate,
+    groupAttendance,
+    loading,
+    error,
+    refetch: fetchData,
+  };
 }

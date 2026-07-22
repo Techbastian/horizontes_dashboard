@@ -46,14 +46,14 @@ function RouteTooltip({ routes }) {
   );
 }
 
-function ParticipantRow({ p, index }) {
+function ParticipantRow({ p, index, columnas, mostrarTrack }) {
   const [hover, setHover] = useState(false);
 
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '28px 1fr 48px 180px 64px 72px',
+        gridTemplateColumns: columnas,
         alignItems: 'center',
         gap: 12,
         padding: '8px 12px',
@@ -76,12 +76,15 @@ function ParticipantRow({ p, index }) {
         <div style={{ fontSize: 11, color: '#64748b' }}>{p.email}</div>
       </div>
 
-      {/* Track badge */}
-      <span style={{
-        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
-        background: `${TRACK_COLORS[p.track]}22`, color: TRACK_COLORS[p.track],
-        textAlign: 'center',
-      }}>{p.track}</span>
+      {/* Track badge — se oculta en programas de ruta única (Círculos) */}
+      {mostrarTrack && (
+        <span style={{
+          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+          background: `${TRACK_COLORS[p.track] || '#64748b'}22`,
+          color: TRACK_COLORS[p.track] || '#64748b',
+          textAlign: 'center',
+        }}>{p.track}</span>
+      )}
 
       {/* Progress bar + tooltip */}
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6 }}
@@ -107,13 +110,29 @@ function ParticipantRow({ p, index }) {
   );
 }
 
-export default function FormationProgressSection({ formationProgress }) {
+// Los textos y la columna de ruta son parametrizables porque esta sección la
+// comparten Horizontes Senior (nivelación, rutas Jr/Sr) y Círculos de
+// Conocimiento (avance en plataforma, ruta única). Los valores por defecto son
+// los de Horizontes Senior, para no tocar su llamada.
+export default function FormationProgressSection({
+  formationProgress,
+  titulo = 'Nivelación — Progreso de Formación',
+  subtitulo = 'Avance individual por ruta. Hover sobre la barra para ver detalle por módulo.',
+  textoActivos = 'en proceso de nivelación',
+  mostrarTrack = true,
+}) {
   const [filter, setFilter] = useState('todos'); // todos | activos | inactivos
   const [search, setSearch] = useState('');
 
   if (!formationProgress) return null;
 
   const { participants, active, inactive, globalAvg, distribution } = formationProgress;
+  const columnas = mostrarTrack
+    ? '28px 1fr 48px 180px 64px 72px'
+    : '28px 1fr 180px 64px 72px';
+  const encabezados = mostrarTrack
+    ? ['#', 'Participante', 'Ruta', 'Progreso por módulos', '%', 'Estado']
+    : ['#', 'Participante', 'Progreso por módulos', '%', 'Estado'];
 
   const visible = participants
     .filter(p => {
@@ -133,8 +152,8 @@ export default function FormationProgressSection({ formationProgress }) {
       {/* Section title */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>Nivelación — Progreso de Formación</h2>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Avance individual por ruta. Hover sobre la barra para ver detalle por módulo.</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>{titulo}</h2>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>{subtitulo}</p>
         </div>
       </div>
 
@@ -149,7 +168,7 @@ export default function FormationProgressSection({ formationProgress }) {
         <div className="card" style={{ padding: '16px 20px' }}>
           <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Activos</div>
           <div style={{ fontSize: 36, fontWeight: 800, color: '#10b981', marginTop: 4 }}>{active.length}</div>
-          <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>en proceso de nivelación</div>
+          <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>{textoActivos}</div>
         </div>
 
         <div className="card" style={{ padding: '16px 20px' }}>
@@ -207,11 +226,11 @@ export default function FormationProgressSection({ formationProgress }) {
 
         {/* Column headers */}
         <div style={{
-          display: 'grid', gridTemplateColumns: '28px 1fr 48px 180px 64px 72px',
+          display: 'grid', gridTemplateColumns: columnas,
           gap: 12, padding: '6px 12px',
           borderBottom: '1px solid #e2e8f0',
         }}>
-          {['#', 'Participante', 'Ruta', 'Progreso por módulos', '%', 'Estado'].map(h => (
+          {encabezados.map(h => (
             <span key={h} style={{ fontSize: 11, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: h === '#' ? 'right' : undefined }}>{h}</span>
           ))}
         </div>
@@ -221,7 +240,15 @@ export default function FormationProgressSection({ formationProgress }) {
           {visible.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: '#475569', fontSize: 13 }}>Sin resultados</div>
           ) : (
-            visible.map((p, i) => <ParticipantRow key={p.candidateId} p={p} index={i} />)
+            visible.map((p, i) => (
+              <ParticipantRow
+                key={p.candidateId}
+                p={p}
+                index={i}
+                columnas={columnas}
+                mostrarTrack={mostrarTrack}
+              />
+            ))
           )}
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useApplicationsData } from './hooks/useApplicationsData';
+import { useCirculosData } from './hooks/useCirculosData';
 import Layout from './components/Layout';
 import DashboardPage from './pages/DashboardPage';
 import CandidatesPage from './pages/CandidatesPage';
@@ -33,6 +34,13 @@ function ErrorScreen({ message, onRetry }) {
 export default function App() {
   const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
 
+  // Círculos se carga aquí arriba, no dentro de CirculosPage, porque ahora lo
+  // consumen dos páginas (/circulos y /formacion): con el hook en cada una se
+  // dispararían dos veces las mismas consultas.
+  const circulos = useCirculosData();
+
+  // Solo bloquea el hook de Horizontes Senior. Si Círculos falla o va más lento,
+  // el resto del dashboard debe seguir funcionando.
   if (loading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
 
@@ -74,6 +82,7 @@ export default function App() {
                 attendanceByCandidate={attendanceByCandidate}
                 groupAttendance={groupAttendance}
                 updateEnrollment={updateEnrollment}
+                circulos={circulos}
               />
             }
           />
@@ -85,9 +94,10 @@ export default function App() {
             path="/eventos"
             element={<EventsPage cohort={cohort} />}
           />
-          {/* Círculos de Conocimiento trae sus propios datos (useCirculosData):
-              no cuelga del hook de Horizontes Senior. */}
-          <Route path="/circulos" element={<CirculosPage />} />
+          {/* Círculos de Conocimiento tiene su propio hook (useCirculosData): no
+              cuelga del de Horizontes Senior. Se invoca arriba y baja por props
+              porque /formacion también lo consume. */}
+          <Route path="/circulos" element={<CirculosPage circulos={circulos} />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -1,5 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  calcularOcurridas,
+  calcularAsistenciaPorCandidato,
+  calcularAsistenciaPorGrupo,
+} from '../lib/asistencia';
 
 // Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
 // status='active': la base es compartida y ya hay más de un programa activo (Círculos
@@ -265,85 +270,18 @@ export function useApplicationsData() {
     return { participants, active, inactive, globalAvg, distribution };
   }, [courseStatus, coursesList, enrollments]);
 
-  // Actividades que YA ocurrieron (cuentan en el %). Una actividad "ocurrió" si:
-  //   • sesiones y cafés → tienen fecha y esa fecha ya pasó (o es hoy); las futuras van en gris y NO cuentan.
-  //   • entregables → cuentan una vez que el grupo ya arrancó a entregar (al menos alguien entregó):
-  //     entregado = 100%, pendiente = 0%. Mientras nadie del grupo haya entregado (p.ej. Activación
-  //     al inicio), el entregable se excluye para no penalizar por algo que aún no aplica; se auto-activa
-  //     con la primera entrega.
-  //   • fallback sin fecha → si al menos alguien asistió.
-  const occurredActivities = useMemo(() => {
-    const agg = {};
-    sessionAttendance.forEach(r => {
-      const k = `${r.grupo}|${r.tipo}|${r.actividad}`;
-      if (!agg[k]) agg[k] = { tipo: r.tipo, fecha: r.fecha, anyAttended: false };
-      if (r.asistio === true) agg[k].anyAttended = true;
-    });
-    const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
-    const set = new Set();
-    Object.entries(agg).forEach(([k, v]) => {
-      const ocurrio = v.tipo === 'entregable'
-        ? v.anyAttended
-        : (v.fecha ? (new Date(v.fecha) <= hoy) : v.anyAttended);
-      if (ocurrio) set.add(k);
-    });
-    return set;
-  }, [sessionAttendance]);
+  // El cálculo vive en src/lib/asistencia.js porque lo comparten los dos programas.
+  const occurredActivities = useMemo(() => calcularOcurridas(sessionAttendance), [sessionAttendance]);
 
-  // % contando solo actividades ocurridas (null si aún no ocurre ninguna)
-  const pctOcurridas = (items) => {
-    const occ = items.filter(i => i.occurred);
-    if (!occ.length) return null;
-    return Math.round((occ.filter(i => i.asistio === true).length / occ.length) * 100);
-  };
+  const attendanceByCandidate = useMemo(
+    () => calcularAsistenciaPorCandidato(sessionAttendance, occurredActivities),
+    [sessionAttendance, occurredActivities]
+  );
 
-  // Asistencia por candidato con flag `occurred` y porcentajes ajustados (solo ocurridas)
-  const attendanceByCandidate = useMemo(() => {
-    const map = {};
-    sessionAttendance.forEach(r => {
-      if (!map[r.candidate_id]) map[r.candidate_id] = { grupo: r.grupo, sesiones: [], cafes: [], entregables: [] };
-      const bucket = r.tipo === 'sesion' ? 'sesiones' : r.tipo === 'cafe' ? 'cafes' : 'entregables';
-      const occurred = occurredActivities.has(`${r.grupo}|${r.tipo}|${r.actividad}`);
-      map[r.candidate_id][bucket].push({ ...r, occurred });
-    });
-    Object.values(map).forEach(g => {
-      ['sesiones', 'cafes', 'entregables'].forEach(k => g[k].sort((a, b) => (a.orden || 0) - (b.orden || 0)));
-      g.pctSesiones = pctOcurridas(g.sesiones);
-      g.pctCafes = pctOcurridas(g.cafes);
-      g.pctEntregables = pctOcurridas(g.entregables);
-      // Total ponderado ajustado: renormaliza pesos sobre los componentes que ya tienen actividades ocurridas
-      const parts = [];
-      if (g.pctSesiones != null) parts.push([0.35, g.pctSesiones]);
-      if (g.pctCafes != null) parts.push([0.40, g.pctCafes]);
-      if (g.pctEntregables != null) parts.push([0.25, g.pctEntregables]);
-      const wsum = parts.reduce((s, [w]) => s + w, 0);
-      g.totalPonderado = wsum ? Math.round(parts.reduce((s, [w, v]) => s + w * v, 0) / wsum) : null;
-    });
-    return map;
-  }, [sessionAttendance, occurredActivities]);
-
-  // Asistencia agregada por grupo, para gráficos: { grupo: { sesiones:[], cafes:[] } }. Marca pendientes.
-  const groupAttendance = useMemo(() => {
-    const groups = {}; // grupo -> tipo -> actividad -> agg
-    sessionAttendance.forEach(r => {
-      if (r.tipo !== 'sesion' && r.tipo !== 'cafe') return;
-      groups[r.grupo] = groups[r.grupo] || { sesion: {}, cafe: {} };
-      const bucket = groups[r.grupo][r.tipo];
-      if (!bucket[r.actividad]) bucket[r.actividad] = { actividad: r.actividad, fecha: r.fecha, orden: r.orden, asistieron: 0, total: 0 };
-      if (r.asistio !== null) {
-        bucket[r.actividad].total++;
-        if (r.asistio) bucket[r.actividad].asistieron++;
-      }
-    });
-    const build = (grupo, tipo, obj) => Object.values(obj)
-      .sort((a, b) => (a.orden || 0) - (b.orden || 0))
-      .map(s => ({ ...s, occurred: occurredActivities.has(`${grupo}|${tipo}|${s.actividad}`), pct: s.total ? Math.round((s.asistieron / s.total) * 100) : 0 }));
-    const out = {};
-    Object.entries(groups).forEach(([grupo, tipos]) => {
-      out[grupo] = { sesiones: build(grupo, 'sesion', tipos.sesion), cafes: build(grupo, 'cafe', tipos.cafe) };
-    });
-    return out;
-  }, [sessionAttendance, occurredActivities]);
+  const groupAttendance = useMemo(
+    () => calcularAsistenciaPorGrupo(sessionAttendance, occurredActivities),
+    [sessionAttendance, occurredActivities]
+  );
 
   // Continuidad HS → Círculos de Conocimiento. Responde a "¿qué pasó con los que
   // no quedaron seleccionados?": se cruzan los postulantes de HS contra las

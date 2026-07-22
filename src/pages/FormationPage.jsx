@@ -1,11 +1,28 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
 
-const GROUPS = ['Senior', 'Junior', 'Activación'];
+// Cada programa trae sus propios grupos. Horizontes Senior se divide en rutas;
+// Círculos de Conocimiento es un grupo único de 263 personas sin subdividir.
+const PROGRAMAS = {
+  'horizontes-senior': {
+    nombre: 'Horizontes Senior',
+    grupos: ['Senior', 'Junior', 'Activación'],
+    // HS pondera sesiones 35% / cafés 40% / entregables 25%; Círculos solo tiene
+    // sesiones, así que su "total" es la asistencia simple y esas columnas sobran.
+    columnasExtra: true,
+  },
+  'circulos-de-conocimiento': {
+    nombre: 'Círculos de Conocimiento',
+    grupos: ['Círculos'],
+    columnasExtra: false,
+  },
+};
+
 const GROUP_META = {
   Senior:     { color: 'var(--accent-teal)',   solid: '#0d9488', icon: '⭐', label: 'Ruta Senior' },
   Junior:     { color: 'var(--accent-violet)', solid: '#7c3aed', icon: '🌱', label: 'Ruta Junior' },
   'Activación': { color: '#f59e0b',            solid: '#f59e0b', icon: '⚡', label: 'Estrategia de Activación' },
+  'Círculos': { color: 'var(--accent-blue)',   solid: '#3b82f6', icon: '🔗', label: 'Círculos de Conocimiento' },
 };
 
 function pct01(v) { return v == null ? null : Math.round(v * 100); }
@@ -136,27 +153,50 @@ function AttendanceBarChart({ title, items, kind }) {
   );
 }
 
-export default function FormationPage({ enrollments = [], formationProgress, attendanceByCandidate = {}, groupAttendance = {}, updateEnrollment }) {
-  const [activeTab, setActiveTab] = useState('Senior');
+export default function FormationPage({ enrollments = [], formationProgress, attendanceByCandidate = {}, groupAttendance = {}, updateEnrollment, circulos }) {
+  const [programa, setPrograma] = useState('horizontes-senior');
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(true);
   const [selectedProfile, setSelectedProfile] = useState(null);
 
+  const cfg = PROGRAMAS[programa];
+  const GROUPS = cfg.grupos;
+  const [activeTab, setActiveTab] = useState(GROUPS[0]);
+
+  // Los dos programas exponen las mismas formas (ver src/lib/asistencia.js), así
+  // que aquí solo se elige de cuál se lee. Sin datos de Círculos se cae a HS.
+  const esCirculos = programa === 'circulos-de-conocimiento';
+  const datos = esCirculos
+    ? {
+        enrollments: circulos?.enrollments || [],
+        formationProgress: circulos?.avancePlataforma || null,
+        attendanceByCandidate: circulos?.attendanceByCandidate || {},
+        groupAttendance: circulos?.groupAttendance || {},
+      }
+    : { enrollments, formationProgress, attendanceByCandidate, groupAttendance };
+
+  // Al cambiar de programa cambian los grupos: la pestaña anterior no existe.
+  const cambiarPrograma = (slug) => {
+    setPrograma(slug);
+    setActiveTab(PROGRAMAS[slug].grupos[0]);
+    setSearch('');
+  };
+
   const progressByCandidateId = useMemo(() => {
-    if (!formationProgress) return {};
+    if (!datos.formationProgress) return {};
     const map = {};
-    formationProgress.participants.forEach(p => { map[p.candidateId] = p; });
+    datos.formationProgress.participants.forEach(p => { map[p.candidateId] = p; });
     return map;
-  }, [formationProgress]);
+  }, [datos.formationProgress]);
 
   // Construir perfiles desde enrollments (ya incluye ruta_asignada, historial y ponderados)
   // Se excluyen quienes nunca fueron elegidos (elegido === false): no forman parte de la selección.
   const profiles = useMemo(() => {
-    return enrollments.filter(enr => enr.custom_form_data?.elegido !== false).map(enr => {
+    return datos.enrollments.filter(enr => enr.custom_form_data?.elegido !== false).map(enr => {
       const c = enr.candidate || {};
       const cf = enr.custom_form_data || {};
       // Porcentajes ajustados (solo actividades ocurridas); fallback al Excel si no hay filas de asistencia.
-      const att = attendanceByCandidate[c.id];
+      const att = datos.attendanceByCandidate[c.id];
       return {
         id: enr.id,
         candidate_id: c.id,
@@ -182,7 +222,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         totalPonderado: att ? att.totalPonderado : pct01(cf.total_ponderado),
       };
     });
-  }, [enrollments, attendanceByCandidate]);
+  }, [datos.enrollments, datos.attendanceByCandidate]);
 
   // Stats globales por grupo
   const groupStats = useMemo(() => {
@@ -197,7 +237,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
       s[g] = { total: list.length, activos: activos.length, inactivos: list.length - activos.length, avgSesiones: avg('pondSesiones'), avgTotal: avg('totalPonderado') };
     });
     return s;
-  }, [profiles]);
+  }, [profiles, GROUPS]);
 
   const filtered = useMemo(() => {
     let list = profiles.filter(p => p.ruta === activeTab);
@@ -215,13 +255,13 @@ export default function FormationPage({ enrollments = [], formationProgress, att
 
   // Contexto de madurez del grupo activo: cuántas sesiones ya ocurrieron y hasta qué fecha
   const sesInfo = useMemo(() => {
-    const ses = groupAttendance[activeTab]?.sesiones || [];
+    const ses = datos.groupAttendance[activeTab]?.sesiones || [];
     const realizadas = ses.filter(s => s.occurred).length;
     const lastFecha = ses
       .filter(s => s.occurred && s.fecha)
       .reduce((max, s) => (!max || s.fecha > max) ? s.fecha : max, null);
     return { realizadas, total: ses.length, lastFecha };
-  }, [groupAttendance, activeTab]);
+  }, [datos.groupAttendance, activeTab]);
 
   const meta = GROUP_META[activeTab];
   const st = groupStats[activeTab] || {};
@@ -231,12 +271,30 @@ export default function FormationPage({ enrollments = [], formationProgress, att
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div className="page-header-left">
           <h1>Cohorte de Formación</h1>
-          <p>Asistencia y avance formativo por grupo · Senior, Junior y Estrategia de Activación.</p>
+          <p>
+            {esCirculos
+              ? 'Asistencia a sesiones y avance en plataforma · Círculos de Conocimiento.'
+              : 'Asistencia y avance formativo por grupo · Senior, Junior y Estrategia de Activación.'}
+          </p>
         </div>
+        {circulos && (
+          <div className="page-header-actions">
+            <select
+              className="filter-select"
+              value={programa}
+              onChange={e => cambiarPrograma(e.target.value)}
+              aria-label="Programa"
+            >
+              {Object.entries(PROGRAMAS).map(([slug, p]) => (
+                <option key={slug} value={slug}>{p.nombre}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* KPIs por grupo */}
-      <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 24 }}>
+      <div className="kpi-grid" style={{ gridTemplateColumns: `repeat(${GROUPS.length}, 1fr)`, marginBottom: 24 }}>
         {GROUPS.map((g, i) => {
           const gs = groupStats[g] || {};
           const gm = GROUP_META[g];
@@ -264,7 +322,10 @@ export default function FormationPage({ enrollments = [], formationProgress, att
           <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', width: 120 }}>Promedios del grupo<br /><span style={{ color: meta.color, fontSize: 13 }}>{meta.label}</span></div>
           <div style={{ display: 'flex', gap: 32 }}>
             <div><div style={{ fontSize: 12, color: '#64748b' }}>Asistencia a sesiones</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgSesiones) }}>{st.avgSesiones ?? '—'}%</div></div>
-            <div><div style={{ fontSize: 12, color: '#64748b' }}>Total ponderado</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgTotal) }}>{st.avgTotal ?? '—'}%</div></div>
+            {/* El ponderado solo tiene sentido donde hay cafés y entregables que ponderar. */}
+            {cfg.columnasExtra && (
+              <div><div style={{ fontSize: 12, color: '#64748b' }}>Total ponderado</div><div style={{ fontSize: 30, fontWeight: 800, color: progressColor(st.avgTotal) }}>{st.avgTotal ?? '—'}%</div></div>
+            )}
             <div><div style={{ fontSize: 12, color: '#64748b' }}>Sesiones realizadas</div><div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>{sesInfo.realizadas}<span style={{ fontSize: 16, color: '#475569', fontWeight: 600 }}>/{sesInfo.total}</span></div></div>
             <div><div style={{ fontSize: 12, color: '#64748b' }}>Participantes</div><div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>{st.activos ?? 0}</div></div>
           </div>
@@ -274,9 +335,11 @@ export default function FormationPage({ enrollments = [], formationProgress, att
             </div>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <AttendanceBarChart title="Asistencia por sesión" items={groupAttendance[activeTab]?.sesiones} kind="sesion" />
-          <AttendanceBarChart title="Asistencia a cafés de conocimiento" items={groupAttendance[activeTab]?.cafes} kind="cafe" />
+        <div style={{ display: 'grid', gridTemplateColumns: cfg.columnasExtra ? '1fr 1fr' : '1fr', gap: 16 }}>
+          <AttendanceBarChart title="Asistencia por sesión" items={datos.groupAttendance[activeTab]?.sesiones} kind="sesion" />
+          {cfg.columnasExtra && (
+            <AttendanceBarChart title="Asistencia a cafés de conocimiento" items={datos.groupAttendance[activeTab]?.cafes} kind="cafe" />
+          )}
         </div>
       </div>
 
@@ -335,14 +398,20 @@ export default function FormationPage({ enrollments = [], formationProgress, att
           <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 1040 }}>
             <thead>
               <tr>
-                {['Participante', 'Documento', 'Historial', 'Asist. sesiones', 'Cafés', 'Entregable', 'Total', 'Estado'].map((h, i) => (
+                {(cfg.columnasExtra
+                  ? ['Participante', 'Documento', 'Historial', 'Asist. sesiones', 'Cafés', 'Entregable', 'Total', 'Estado']
+                  // Círculos: sin transiciones de nivel ni cafés/entregables. En su
+                  // lugar, el avance en plataforma, que es su segunda métrica.
+                  : ['Participante', 'Documento', 'Asist. sesiones', 'Progreso plataforma', 'Total', 'Estado']
+                ).map((h, i) => (
                   <th key={h} style={{ textAlign: i === 0 ? 'left' : 'center', padding: '12px 14px', background: 'rgba(148,163,184,0.08)', fontSize: 12, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(p => {
-                const att = attendanceByCandidate[p.candidate_id] || {};
+                const att = datos.attendanceByCandidate[p.candidate_id] || {};
+                const avance = progressByCandidateId[p.candidate_id];
                 return (
                 <tr key={p.id} onClick={() => setSelectedProfile(p)} style={{ cursor: 'pointer', opacity: p.isActive ? 1 : 0.55 }}>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'left', borderRadius: 4 }}>
@@ -350,16 +419,27 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.email}</div>
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4, fontSize: 13 }}>{p.doc}</td>
-                  <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}><HistoryBadge profile={p} /></td>
+                  {cfg.columnasExtra && (
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}><HistoryBadge profile={p} /></td>
+                  )}
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
                     <AttendanceCells items={att.sesiones} pct={p.pondSesiones} />
                   </td>
-                  <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                    <AttendanceCells items={att.cafes} pct={p.pondCafes} />
-                  </td>
-                  <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                    <AttendanceCells items={att.entregables} pct={p.pondEntregables} />
-                  </td>
+                  {cfg.columnasExtra ? (
+                    <>
+                      <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
+                        <AttendanceCells items={att.cafes} pct={p.pondCafes} />
+                      </td>
+                      <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
+                        <AttendanceCells items={att.entregables} pct={p.pondEntregables} />
+                      </td>
+                    </>
+                  ) : (
+                    // Avance en plataforma. "—" mientras no se cargue el reporte.
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
+                      <Bar pct={avance ? avance.avgProgress : null} width={80} />
+                    </td>
+                  )}
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
                     <span style={{ fontSize: 14, fontWeight: 800, color: progressColor(p.totalPonderado) }}>{p.totalPonderado ?? '—'}%</span>
                   </td>
@@ -372,7 +452,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan="8" style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay participantes en este grupo.</td></tr>
+                <tr><td colSpan={cfg.columnasExtra ? 8 : 6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay participantes en este grupo.</td></tr>
               )}
             </tbody>
           </table>
@@ -383,9 +463,13 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         <ParticipantDetailModal
           profile={selectedProfile}
           courseProgress={progressByCandidateId[selectedProfile.candidate_id]}
-          attendance={attendanceByCandidate[selectedProfile.candidate_id]}
+          attendance={datos.attendanceByCandidate[selectedProfile.candidate_id]}
           onClose={() => setSelectedProfile(null)}
-          onSave={updateEnrollment
+          // Solo Horizontes Senior es editable: `updateEnrollment` resuelve el
+          // enrollment contra la lista de HS y con uno de Círculos lanzaría
+          // "Enrollment no encontrado". Los flujos que edita el modal (retiro,
+          // riesgo, cambio de nivel) tampoco están definidos para Círculos.
+          onSave={updateEnrollment && !esCirculos
             ? async (id, updates) => { await updateEnrollment(id, updates); setSelectedProfile(null); }
             : null}
         />

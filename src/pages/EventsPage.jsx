@@ -9,7 +9,14 @@ import {
 } from '../lib/bogotaTime';
 import EventEditorModal from '../components/EventEditorModal';
 import EventAttendanceModal from '../components/EventAttendanceModal';
-import { GRUPOS, GRUPO_CLASS, tipoLabel, attendanceTipo } from '../lib/eventos';
+import {
+  gruposDe,
+  GRUPO_CLASS,
+  tipoLabel,
+  attendanceTipo,
+  PROGRAMA_HS,
+  PROGRAMA_CIRCULOS,
+} from '../lib/eventos';
 
 function pad(n) {
   return String(n).padStart(2, '0');
@@ -56,16 +63,56 @@ function buildCalendarCells(viewYear, viewMonth0) {
 const WEEKDAY_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 export default function EventsPage({ cohort }) {
-  const cohortId = cohort?.id;
-
   const [cursor, setCursor] = useState(() => new Date());
   const viewYear = cursor.getFullYear();
   const viewMonth0 = cursor.getMonth();
+
+  // El calendario aloja los dos programas. `cohort` (Horizontes Senior) llega por
+  // props y es la selección inicial; la lista completa se trae aquí porque esta
+  // página ya consulta Supabase directo (ver CLAUDE.md, excepción documentada).
+  const [cohortes, setCohortes] = useState([]);
+  const [selectedCohortId, setSelectedCohortId] = useState(cohort?.id || null);
+  const cohortId = selectedCohortId || cohort?.id;
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [grupoFilter, setGrupoFilter] = useState('Todos');
+
+  useEffect(() => {
+    let cancelado = false;
+    (async () => {
+      // `!inner` + filtro sobre el embed acota a los dos programas de este
+      // dashboard. Hoy son las únicas 2 cohortes de la base, pero es compartida
+      // con otros módulos (bolsa, aliados…): sin el filtro, el día que alguno
+      // cree su cohorte aparecería en este selector.
+      const { data, error: err } = await supabase
+        .from('cohorts')
+        .select('id, name, program:projects!inner(slug, name)')
+        .in('program.slug', [PROGRAMA_HS, PROGRAMA_CIRCULOS])
+        .order('created_at', { ascending: true });
+      if (cancelado) return;
+      if (err) {
+        // Sin la lista el calendario sigue sirviendo para Horizontes Senior.
+        console.warn('No se pudo cargar la lista de cohortes:', err.message);
+        return;
+      }
+      setCohortes(data || []);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
+
+  const cohorteActual = cohortes.find((c) => c.id === cohortId);
+  const programa = cohorteActual?.program?.slug || PROGRAMA_HS;
+  const grupos = useMemo(() => gruposDe(programa), [programa]);
+
+  // Al cambiar de programa cambia el vocabulario de grupos: un filtro "Junior"
+  // heredado dejaría el calendario de Círculos vacío sin explicación.
+  useEffect(() => {
+    setGrupoFilter('Todos');
+  }, [programa]);
 
   const [selectedDayKey, setSelectedDayKey] = useState(null);
 
@@ -171,6 +218,25 @@ export default function EventsPage({ cohort }) {
             eventos (zona America/Bogota).
           </p>
         </div>
+        {cohortes.length > 1 && (
+          <div className="page-header-actions">
+            <select
+              className="filter-select"
+              value={cohortId || ''}
+              onChange={(e) => {
+                setSelectedCohortId(e.target.value);
+                setSelectedDayKey(null);
+              }}
+              aria-label="Programa y cohorte"
+            >
+              {cohortes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.program?.name} — {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="events-calendar-wrap">
@@ -206,7 +272,7 @@ export default function EventsPage({ cohort }) {
         </div>
 
         <div className="events-group-filters">
-          {['Todos', ...GRUPOS].map((g) => (
+          {['Todos', ...grupos].map((g) => (
             <button
               key={g}
               type="button"
@@ -414,6 +480,7 @@ export default function EventsPage({ cohort }) {
       {editorOpen && (
         <EventEditorModal
           cohortId={cohortId}
+          programa={programa}
           selectedDateKey={selectedDayKey}
           event={editingEvent}
           onClose={() => {
@@ -428,6 +495,7 @@ export default function EventsPage({ cohort }) {
       {attendanceEvent && (
         <EventAttendanceModal
           cohortId={cohortId}
+          programa={programa}
           event={attendanceEvent}
           onClose={() => setAttendanceEvent(null)}
         />

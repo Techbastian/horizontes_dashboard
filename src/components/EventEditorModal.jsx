@@ -6,10 +6,11 @@ import {
   bogotaDateTimeToIso,
   bogotaPlusDays,
 } from '../lib/bogotaTime';
-import { GRUPOS, TIPO_OPCIONES } from '../lib/eventos';
+import { gruposDe, TIPO_OPCIONES } from '../lib/eventos';
 
 export default function EventEditorModal({
   cohortId,
+  programa,
   selectedDateKey,
   event,
   onClose,
@@ -17,10 +18,14 @@ export default function EventEditorModal({
   onDeleted,
 }) {
   const isEdit = Boolean(event?.id);
+  const grupos = gruposDe(programa);
+  // En Horizontes Senior lo más común es crear un evento que aplica a todas las
+  // rutas; en Círculos, que es grupo único, el único valor posible es ese grupo.
+  const grupoPorDefecto = grupos.includes('Compartido') ? 'Compartido' : grupos[0];
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [evidenciaUrl, setEvidenciaUrl] = useState('');
-  const [grupo, setGrupo] = useState('Compartido');
+  const [grupo, setGrupo] = useState(grupoPorDefecto);
   const [codigo, setCodigo] = useState('');
   const [tipos, setTipos] = useState([]);
   const [fechaDia, setFechaDia] = useState(selectedDateKey);
@@ -34,7 +39,7 @@ export default function EventEditorModal({
       setNombre(event.nombre || '');
       setDescripcion(event.descripcion || '');
       setEvidenciaUrl(event.evidencia_url || '');
-      setGrupo(event.grupo || 'Compartido');
+      setGrupo(event.grupo || grupoPorDefecto);
       setCodigo(event.codigo || '');
       setTipos(Array.isArray(event.tipo) ? event.tipo : []);
       setFechaDia(isoToBogotaDate(event.fecha_hora_inicio));
@@ -44,14 +49,14 @@ export default function EventEditorModal({
       setNombre('');
       setDescripcion('');
       setEvidenciaUrl('');
-      setGrupo('Compartido');
+      setGrupo(grupoPorDefecto);
       setCodigo('');
       setTipos([]);
       setFechaDia(selectedDateKey);
       setHoraInicio('09:00');
       setHoraFin('10:00');
     }
-  }, [event, selectedDateKey]);
+  }, [event, selectedDateKey, grupoPorDefecto]);
 
   const toggleTipo = (value) =>
     setTipos((prev) => (prev.includes(value) ? prev.filter((t) => t !== value) : [...prev, value]));
@@ -202,7 +207,7 @@ export default function EventEditorModal({
                     value={grupo}
                     onChange={(e) => setGrupo(e.target.value)}
                   >
-                    {GRUPOS.map((g) => (
+                    {grupos.map((g) => (
                       <option key={g} value={g}>
                         {g}
                       </option>

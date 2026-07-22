@@ -6,9 +6,9 @@ import { GRUPO_CLASS, attendanceTipo, gruposDeAsistencia, tipoLabel } from '../l
 // Clave estable para el mapa de marcas.
 const keyOf = (grupo, candidateId) => `${grupo}:${candidateId}`;
 
-export default function EventAttendanceModal({ cohortId, event, onClose, onSaved }) {
+export default function EventAttendanceModal({ cohortId, programa, event, onClose, onSaved }) {
   const attTipo = attendanceTipo(event); // 'cafe' | 'sesion' | null
-  const grupos = useMemo(() => gruposDeAsistencia(event), [event]);
+  const grupos = useMemo(() => gruposDeAsistencia(event, programa), [event, programa]);
   const fecha = isoToBogotaDate(event.fecha_hora_inicio);
   const actividadFallback = event.codigo || `EVT-${String(event.id).slice(0, 8)}`;
 
@@ -16,6 +16,8 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [activeGrupo, setActiveGrupo] = useState(grupos[0] || null);
+  // Círculos es un grupo único de 263 personas: sin filtro la lista es inmanejable.
+  const [busqueda, setBusqueda] = useState('');
 
   // participantes: { [grupo]: [{ candidate_id, nombre }] }
   const [participantes, setParticipantes] = useState({});
@@ -88,7 +90,18 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
   }, [cohortId, attTipo, fecha, grupos]);
 
   const lista = participantes[activeGrupo] || [];
+  // El contador siempre va sobre el grupo completo (es el dato que importa);
+  // la búsqueda solo acota lo que se pinta y lo que tocan los botones masivos.
   const asistieron = lista.filter((p) => marks[keyOf(activeGrupo, p.candidate_id)]?.asistio).length;
+
+  const listaVisible = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return lista;
+    // Sin acentos: se busca "nunez" y aparece "Núñez".
+    const sinTildes = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    const qn = sinTildes(q);
+    return lista.filter((p) => sinTildes(p.nombre).includes(qn));
+  }, [lista, busqueda]);
 
   const setMark = (grupo, candidateId, patch) =>
     setMarks((prev) => {
@@ -96,10 +109,12 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
       return { ...prev, [k]: { ...prev[k], ...patch } };
     });
 
+  // Actúa sobre lo visible, no sobre el grupo entero: con un filtro activo,
+  // "Marcar todos" sobre los 263 sería un accidente difícil de deshacer.
   const marcarTodos = (valor) =>
     setMarks((prev) => {
       const next = { ...prev };
-      for (const p of lista) {
+      for (const p of listaVisible) {
         const k = keyOf(activeGrupo, p.candidate_id);
         next[k] = { ...next[k], asistio: valor };
       }
@@ -203,7 +218,10 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
                   key={g}
                   type="button"
                   className={`attendance-tab ${GRUPO_CLASS[g]}${activeGrupo === g ? ' is-active' : ''}`}
-                  onClick={() => setActiveGrupo(g)}
+                  onClick={() => {
+                    setActiveGrupo(g);
+                    setBusqueda('');
+                  }}
                 >
                   {g}
                 </button>
@@ -219,13 +237,28 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
             <p style={{ color: 'var(--text-muted)' }}>No hay participantes en este grupo.</p>
           ) : (
             <>
+              {lista.length > 20 && (
+                <input
+                  type="text"
+                  className="attendance-search"
+                  placeholder={`Buscar entre ${lista.length} participantes…`}
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                />
+              )}
+
               <div className="attendance-summary">
                 <span>
                   <strong>{asistieron}</strong> / {lista.length} asistió
+                  {busqueda.trim() && (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {' '}· mostrando {listaVisible.length}
+                    </span>
+                  )}
                 </span>
                 <div className="attendance-bulk">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => marcarTodos(true)}>
-                    Marcar todos
+                    {busqueda.trim() ? 'Marcar visibles' : 'Marcar todos'}
                   </button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => marcarTodos(false)}>
                     Ninguno
@@ -234,7 +267,12 @@ export default function EventAttendanceModal({ cohortId, event, onClose, onSaved
               </div>
 
               <ul className="attendance-list">
-                {lista.map((p) => {
+                {listaVisible.length === 0 && (
+                  <li style={{ color: 'var(--text-muted)', padding: '10px 2px' }}>
+                    Nadie coincide con “{busqueda.trim()}”.
+                  </li>
+                )}
+                {listaVisible.map((p) => {
                   const k = keyOf(activeGrupo, p.candidate_id);
                   const m = marks[k] || { asistio: false, observacion: '' };
                   return (

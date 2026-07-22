@@ -1619,6 +1619,11 @@ body {
   --grp-color: var(--accent-slate);
   --grp-dim: rgba(100, 116, 139, 0.15);
 }
+/* Círculos de Conocimiento: grupo único del segundo programa. */
+.grp-circulos {
+  --grp-color: var(--accent-blue);
+  --grp-dim: var(--accent-blue-dim);
+}
 
 /* ── Filtros por grupo ────────────────────────────────────────────────────── */
 .events-group-filters {
@@ -1882,6 +1887,24 @@ body {
   color: var(--text-primary);
   font-size: 12.5px;
   font-family: inherit;
+}
+
+/* Buscador de participantes: solo aparece en grupos grandes (Círculos, 263). */
+.attendance-search {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.attendance-search:focus {
+  outline: none;
+  border-color: var(--accent-teal);
 }
 
 @media (max-width: 560px) {

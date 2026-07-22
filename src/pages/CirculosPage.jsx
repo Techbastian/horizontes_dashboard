@@ -1,8 +1,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { useCirculosData } from '../hooks/useCirculosData';
 import KPICard from '../components/KPICard';
 import DonutChart from '../components/DonutChart';
 import HorizontalBarChart from '../components/HorizontalBarChart';
+import FormationProgressSection from '../components/FormationProgressSection';
 
 const COLOR_MUJERES = '#ec4899';
 const COLOR_HOMBRES = '#3b82f6';
@@ -23,8 +23,8 @@ function TooltipEdad({ active, payload, label }) {
   );
 }
 
-export default function CirculosPage() {
-  const { cohorte, metricas, loading, error } = useCirculosData();
+export default function CirculosPage({ circulos }) {
+  const { cohorte, metricas, avancePlataforma, loading, error } = circulos;
 
   if (loading) {
     return (
@@ -192,6 +192,32 @@ export default function CirculosPage() {
           </div>
         </div>
       </div>
+
+      {avancePlataforma ? (
+        <FormationProgressSection
+          formationProgress={avancePlataforma}
+          titulo="Avance en plataforma"
+          subtitulo="Progreso individual por curso. Hover sobre la barra para ver el detalle."
+          textoActivos="participantes activos"
+          mostrarTrack={false}
+        />
+      ) : (
+        <div className="card" style={{ marginTop: 24 }}>
+          <div className="card-title" style={{ fontSize: 15 }}>Avance en plataforma: sin datos aún</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.55 }}>
+            Esta sección se llena con el reporte de plataforma. Deja el archivo en
+            <code style={{ fontSize: 12 }}> bases_de_datos/reporte circulos de conocimiento.xlsx </code>
+            y se carga con un ETL, igual que se hace con Horizontes Senior.
+          </div>
+          <div style={{
+            fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12,
+            borderTop: '1px solid var(--border-subtle)',
+          }}>
+            Los cursos de Círculos todavía no están dados de alta en el catálogo: se crean
+            a partir del propio reporte en la primera carga.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
