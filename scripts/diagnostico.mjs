@@ -24,6 +24,11 @@ const env = readFileSync(resolve(__dirname, '../.env'), 'utf-8').split('\n').red
 }, {});
 
 const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+
+// Los diagnósticos apuntan a Horizontes Senior. Se fija por slug porque la base
+// aloja varios programas activos (Círculos de Conocimiento) y `status='active'`
+// con `.single()` falla en cuanto hay más de uno.
+const PROJECT_SLUG = 'horizontes-senior';
 const line = (t) => console.log(`\n${'─'.repeat(60)}\n  ${t}\n${'─'.repeat(60)}`);
 
 // ── Chequeos ────────────────────────────────────────────────────────────────
@@ -37,10 +42,10 @@ async function enrollments() {
 
 async function ids() {
   line('IDs: PROJECT → COHORT → ENROLLMENT');
-  const { data: proj } = await supabase.from('projects').select('id, name, status').eq('status', 'active').single();
-  console.log('Proyecto activo:', proj);
+  const { data: proj } = await supabase.from('projects').select('id, name, status').eq('slug', PROJECT_SLUG).single();
+  console.log('Proyecto:', proj);
   const { data: coh } = await supabase.from('cohorts').select('id, name, program_id').eq('program_id', proj.id).single();
-  console.log('Cohort activo:', coh);
+  console.log('Cohorte:', coh);
   const { data: enrs } = await supabase.from('program_enrollments').select('cohort_id').limit(1);
   console.log('Enrollments apuntan a cohort_id:', enrs[0]?.cohort_id);
   console.log('¿Coincide?:', coh.id === enrs[0]?.cohort_id);
@@ -60,7 +65,7 @@ async function join() {
 
 async function rutas() {
   line('DISTRIBUCIÓN DE RUTAS / GRUPOS');
-  const { data: proj } = await supabase.from('projects').select('id').eq('status', 'active').single();
+  const { data: proj } = await supabase.from('projects').select('id').eq('slug', PROJECT_SLUG).single();
   const { data: coh } = await supabase.from('cohorts').select('id').eq('program_id', proj.id).single();
 
   const { data: enrs } = await supabase.from('program_enrollments').select('custom_form_data').eq('cohort_id', coh.id);

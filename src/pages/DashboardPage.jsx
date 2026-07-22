@@ -35,7 +35,7 @@ function buildTrendData(applications) {
     .slice(-14);
 }
 
-export default function DashboardPage({ metrics, applications, formationProgress }) {
+export default function DashboardPage({ metrics, applications, formationProgress, continuidadCirculos }) {
   const navigate = useNavigate();
 
   if (!metrics) return null;
@@ -65,6 +65,11 @@ export default function DashboardPage({ metrics, applications, formationProgress
       {/* Meta del proyecto — 100 formados */}
       {metrics.seleccionados && (
         <MetaCard seleccionados={metrics.seleccionados} onNavigate={() => navigate('/formacion')} />
+      )}
+
+      {/* Continuidad hacia Círculos de Conocimiento */}
+      {continuidadCirculos && (
+        <ContinuidadCirculosCard datos={continuidadCirculos} activosHS={metrics.seleccionados?.totalActivos ?? 0} />
       )}
 
       {/* KPI Cards */}
@@ -507,6 +512,62 @@ export default function DashboardPage({ metrics, applications, formationProgress
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Trazabilidad entre programas del ecosistema. Responde a "¿qué pasó con los que
+// se postularon y no quedaron?": una parte continuó en Círculos de Conocimiento.
+// La relación no está marcada en ningún campo — se deriva cruzando candidate_id,
+// así que este número se recalcula solo a medida que cambian ambos programas.
+function ContinuidadCirculosCard({ datos, activosHS }) {
+  const { totalCirculos, deHS, nuevos, rechazados, pendientes } = datos;
+  const enFormacion = activosHS + totalCirculos;
+
+  const bloques = [
+    { valor: deHS, label: 'venían de Horizontes Senior', detalle: `${rechazados} no elegibles · ${pendientes} sin decisión`, color: 'var(--accent-violet)' },
+    { valor: nuevos, label: 'nuevos en el ecosistema', detalle: 'nunca se postularon a Horizontes Senior', color: 'var(--accent-teal)' },
+  ];
+
+  return (
+    <div className="card" style={{ marginTop: 16, borderColor: 'rgba(124,58,237,0.22)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-violet)', fontWeight: 700 }}>
+            🔗 Ecosistema
+          </div>
+          <div className="card-title" style={{ marginTop: 4 }}>Continuidad hacia Círculos de Conocimiento</div>
+          <div className="card-subtitle">
+            {totalCirculos} personas en el programa hermano. La mayoría son postulantes de Horizontes Senior
+            que no quedaron seleccionados y fueron reencauzados.
+          </div>
+        </div>
+        <div style={{
+          alignSelf: 'center', textAlign: 'right', padding: '8px 16px', borderRadius: 'var(--radius-full)',
+          background: 'var(--accent-violet-dim)', border: '1px solid rgba(124,58,237,0.3)', whiteSpace: 'nowrap',
+        }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-violet)' }}>{enFormacion}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>en formación activa<br />en los dos programas</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, marginTop: 20, flexWrap: 'wrap' }}>
+        {bloques.map((b) => (
+          <div key={b.label} style={{
+            flex: '1 1 220px', padding: '14px 16px', borderRadius: 'var(--radius-md)',
+            background: 'var(--bg-secondary)', borderLeft: `3px solid ${b.color}`,
+          }}>
+            <div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1, color: b.color }}>{b.valor}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginTop: 4 }}>{b.label}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{b.detalle}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14 }}>
+        Estas {deHS} personas ya estaban contadas dentro de los postulados de Horizontes Senior:
+        no se suman dos veces, y ninguna está activa en los dos programas a la vez.
       </div>
     </div>
   );

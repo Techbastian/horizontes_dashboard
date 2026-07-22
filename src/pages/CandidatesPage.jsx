@@ -2,7 +2,7 @@ import { useState } from 'react';
 import CandidateTable from '../components/CandidateTable';
 import CandidateModal from '../components/CandidateModal';
 
-export default function CandidatesPage({ applications, enrollments, updateApplication }) {
+export default function CandidatesPage({ applications, enrollments, updateApplication, circulosIds }) {
   const [selectedApp, setSelectedApp] = useState(null);
 
   return (
@@ -30,6 +30,7 @@ export default function CandidatesPage({ applications, enrollments, updateApplic
           application={selectedApp}
           onClose={() => setSelectedApp(null)}
           onUpdate={updateApplication}
+          enCirculos={!!circulosIds?.has(selectedApp.candidate?.id)}
         />
       )}
     </div>

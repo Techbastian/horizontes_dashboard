@@ -6,6 +6,7 @@ import CandidatesPage from './pages/CandidatesPage';
 import FormationPage from './pages/FormationPage';
 import RetirosPage from './pages/RetirosPage';
 import EventsPage from './pages/EventsPage';
+import CirculosPage from './pages/CirculosPage';
 
 function LoadingScreen() {
   return (
@@ -30,7 +31,7 @@ function ErrorScreen({ message, onRetry }) {
 }
 
 export default function App() {
-  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
+  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
 
   if (loading) return <LoadingScreen />;
   if (error) return <ErrorScreen message={error} onRetry={refetch} />;
@@ -48,6 +49,7 @@ export default function App() {
                 project={project}
                 cohort={cohort}
                 formationProgress={formationProgress}
+                continuidadCirculos={continuidadCirculos}
               />
             }
           />
@@ -58,6 +60,7 @@ export default function App() {
                 applications={applications}
                 enrollments={enrollments}
                 updateApplication={updateApplication}
+                circulosIds={circulosIds}
               />
             }
           />
@@ -82,6 +85,9 @@ export default function App() {
             path="/eventos"
             element={<EventsPage cohort={cohort} />}
           />
+          {/* Círculos de Conocimiento trae sus propios datos (useCirculosData):
+              no cuelga del hook de Horizontes Senior. */}
+          <Route path="/circulos" element={<CirculosPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

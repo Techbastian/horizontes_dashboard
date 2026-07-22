@@ -38,6 +38,15 @@ export default function Sidebar({ isOpen, onClose }) {
           </NavLink>
 
           <NavLink
+            to="/circulos"
+            className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+            onClick={onClose}
+          >
+            <span className="nav-item-icon">🔗</span>
+            Círculos de Conocimiento
+          </NavLink>
+
+          <NavLink
             to="/candidatos"
             className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
             onClick={onClose}

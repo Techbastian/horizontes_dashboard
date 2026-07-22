@@ -29,4 +29,4 @@ alter table public.session_attendance enable row level security;
 drop policy if exists "session_attendance_read" on public.session_attendance;
 create policy "session_attendance_read"
   on public.session_attendance for select
-  using (true);11
+  using (true);

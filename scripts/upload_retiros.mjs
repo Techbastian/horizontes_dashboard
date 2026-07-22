@@ -14,6 +14,7 @@ const COMMIT = process.argv.includes('--commit');
 const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL = resolve(__dirname, '../bases_de_datos/Plantilla de Trazabilidad de PQRS_HorizontesSenior.xlsx');
+const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const norm = d => String(d ?? '').replace(/\D/g, '').trim();
@@ -71,7 +72,11 @@ async function main() {
   const riesgo = readRiesgo(wb);
   console.log(`Casos de abandono: ${retiros.length} | En riesgo: ${riesgo.length}`);
 
-  const { data: cohort } = await supabase.from('cohorts').select('id').eq('status', 'active').order('created_at', { ascending: false }).limit(1).single();
+  // Cohorte fijada por slug: con Círculos de Conocimiento en la base, "la cohorte
+  // activa más reciente" ya no es la de Horizontes Senior.
+  const { data: cohort, error: cohErr } = await supabase.from('cohorts').select('id')
+    .eq('slug_application', COHORT_SLUG).limit(1).single();
+  if (cohErr) throw new Error(`No se encontró la cohorte "${COHORT_SLUG}": ${cohErr.message}`);
   const cohortId = cohort.id;
   const { data: enrs } = await supabase.from('program_enrollments').select('id,custom_form_data,candidates(document_number,email)').eq('cohort_id', cohortId);
   const enrByDoc = new Map();

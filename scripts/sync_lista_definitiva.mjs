@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
+const COHORT_SLUG   = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 const LISTA_PATH    = resolve(__dirname, '../Reportes formacion/Lista definitva.xlsx');
 const ESTADO_PATH   = resolve(__dirname, '../Reportes formacion/estado_detallado_estudiantes_07mayo.xlsx');
 
@@ -48,11 +49,13 @@ function readEstadoDetallado() {
   return map; // email → 'Jr' | 'Sr'
 }
 
-// ── 3. Obtener cohorte activa ──────────────────────────────────────────────────
+// ── 3. Obtener la cohorte de Horizontes Senior ────────────────────────────────
+// Fijada por slug: la base aloja varios programas (Círculos de Conocimiento) y
+// `status='active'` sin orden no garantiza cuál de las cohortes devuelve.
 async function getCohortId() {
   const { data, error } = await supabase
-    .from('cohorts').select('id, name').eq('status', 'active').limit(1).single();
-  if (error) throw new Error(`Error cohort: ${error.message}`);
+    .from('cohorts').select('id, name').eq('slug_application', COHORT_SLUG).limit(1).single();
+  if (error) throw new Error(`No se encontró la cohorte "${COHORT_SLUG}": ${error.message}`);
   console.log(`✅ Cohorte: ${data.name} (${data.id})`);
   return data.id;
 }

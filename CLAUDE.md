@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Dashboard interno de gestión del programa **Horizontes Senior** (formación en analítica de datos para talento plateado; alianza Fundación Saldarriaga Concha, Ruta N, Alcaldía de Medellín). SPA en React que lee/escribe directo a Supabase. **Los datos son de producción real** — no hay entorno de staging. Deploy en Vercel.
 
+Desde julio de 2026 el dashboard aloja **dos programas**: Horizontes Senior y **Círculos de Conocimiento** (ramificación con 263 participantes, cohorte `386dcf50-e269-4b5b-b248-aaa754dbd0aa`). Comparten la tabla `candidates`: 249 de los 263 de Círculos ya existían como postulantes de HS. Por eso **el frontend y los ETL fijan su programa por `slug`, nunca por `status='active'`** — ver la sección de convenciones.
+
 ## Comandos
 
 ```bash
@@ -15,13 +17,20 @@ npm run dev        # servidor de desarrollo Vite
 npm run build      # tsc && vite build → dist/
 npm run preview    # previsualiza el build
 
-# ETL (scripts/*.mjs): DRY RUN por defecto, --commit para escribir en Supabase
+# ETL con DRY RUN por defecto (upload_asistencia, upload_eventos, upload_retiros)
 node scripts/upload_asistencia.mjs            # dry run (no escribe)
 node scripts/upload_asistencia.mjs --commit   # escribe
 node scripts/diagnostico.mjs [enrollments|ids|join|rutas]   # inspección read-only; sin arg corre todo
 ```
 
+⚠️ **`upload_formacion.mjs` y `sync_lista_definitiva.mjs` NO tienen dry run**: escriben en producción apenas arrancan. Además leen de `Reportes formacion/`, carpeta que hoy **no existe en el repo** (los demás ETL leen de `bases_de_datos/`) — son legacy: confirma con el usuario antes de correrlos.
+
 No hay linter, test runner ni script de test configurados. `tsc` corre solo en `build`.
+
+**Toolchain sin configuración explícita** — no lo "arregles" sin motivo:
+- No hay `vite.config.*`. Vite 8 corre con defaults y transforma JSX con el runtime automático; **no hay plugin de React**, así que tampoco Fast Refresh (el `dev` recarga la página entera).
+- `react` / `react-dom` **no están declarados en `package.json`**; llegan como peer deps de `recharts` / `react-router-dom` y sí quedan fijados en `package-lock.json` (React 19). El build pasa; si algún día falla la resolución, declararlos es la salida.
+- `tsc` solo type-checkea los `.ts` de `src/` (los `.jsx` no se validan). En la práctica solo revisa los archivos plantilla sin usar — romperlos rompe el build.
 
 ## Arquitectura
 
@@ -30,8 +39,10 @@ No hay linter, test runner ni script de test configurados. `tsc` corre solo en `
 
 Los fetches de `project_applications` y `session_attendance` están **paginados de 1000 en 1000** (límite de PostgREST) — respeta ese patrón al agregar tablas grandes.
 
+**Única excepción a la regla:** `EventsPage` y sus modales (`EventEditorModal`, `EventAttendanceModal`) consultan y escriben `eventos` y `session_attendance` **directo a Supabase**, con su propio estado local; `App.jsx` solo les pasa `cohort`. Consecuencia práctica: marcar asistencia desde un evento **no refresca** `useApplicationsData`, así que los % de Formación no cambian hasta recargar la página.
+
 ### Supabase: dos rutas de acceso
-- **Frontend** (`src/lib/supabase.js`): clave **anon** desde `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (`.env`, no versionado). El dashboard es interno y escribe con la anon key; las políticas RLS abren escritura pública en las tablas que edita (`eventos`, `session_attendance`).
+- **Frontend** (`src/lib/supabase.js`): clave **anon** desde `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`, leídas de `.env`. Ojo: **`.env` sí está versionado** (`.gitignore` no lo cubre) — la anon key está en el historial de git; no agregues ahí secretos de mayor privilegio. El dashboard es interno y escribe con la anon key; las políticas RLS abren escritura pública en las tablas que edita (`eventos`, `session_attendance`).
 - **Scripts ETL**: clave **service_role hardcodeada** en cada `.mjs` para cargas masivas.
 - **DDL**: el MCP de Supabase **no tiene permisos DDL**. Los cambios de esquema van como `.sql` en `scripts/` que el usuario corre a mano en el SQL Editor. Escríbelos idempotentes (`IF NOT EXISTS`, `DROP POLICY IF EXISTS`).
 
@@ -71,8 +82,12 @@ candidates → socio_demographic_data (1:1)
 ## Convenciones
 
 - **Componentes en `.jsx`, no `.tsx`**, aunque exista `tsconfig.json`. TypeScript solo valida el build; no conviertas a TSX.
+- **Estilos: un solo `src/index.css`** (~2.000 líneas) con variables CSS en `:root` (tema claro, acentos teal/violeta) y clases globales (`.card`, `.kpi-*`, `.grp-junior`…). No hay Tailwind ni CSS modules; los componentes combinan `className` con `style` inline para lo puntual. Al agregar UI, reutiliza las clases y variables existentes antes de inventar colores.
 - **Archivos plantilla Vite sin usar** — ignóralos y no los importes: `src/counter.ts`, `src/main.ts`, `src/style.css`, `src/assets/{vite,typescript}.svg`. El entry real es `src/main.jsx` → importa `src/index.css`.
 - **Organización de scripts** (`scripts/`, carpeta única): un ETL por dominio (no fusionar `upload_*`, cada uno parsea un Excel distinto con lógica extensa). Los diagnósticos read-only nuevos van como **sub-comando dentro de `diagnostico.mjs`**, no como archivo suelto. Temporales de exploración → scratchpad de la sesión, no en el repo.
 - **`bases_de_datos/`** (fuentes Excel de los ETL) está **gitignored**. Los scripts esperan encontrar ahí `Horizontes_Senior_Matriz_Maestra_VF.xlsx`, `V9_CronogramaFormación_H_S.xlsx`, etc.
+- **Nunca resuelvas el programa o la cohorte por `status='active'`.** Hay dos programas activos; sin `ORDER BY`, PostgREST no garantiza cuál devuelve, y `.single()` falla directamente. Todo (hook y ETL) se fija por slug: `PROJECT_SLUG='horizontes-senior'` / `COHORT_SLUG='horizontes-senior-2026'`, o el `COHORT_ID` explícito de Círculos.
+- **`id` de `program_enrollments`, `socio_demographic_data` y `session_attendance` es `bigint generated always as identity`**: omítelo en los `insert`. El spec de PostgREST los reporta como "sin default", pero pasarles un valor falla con `cannot insert a non-DEFAULT value into column "id"`.
+- **La identidad de una persona no se resuelve por documento a secas.** Los formularios traen documentos mal digitados (13 de 263 en Círculos). El patrón probado está en `upload_circulos.mjs`: cascada documento exacto → correo exacto → teléfono + nombre ≥90% con documento a distancia ≤2 → alta nueva.
 - **Verificación**: el usuario prueba los cambios en el navegador él mismo — no abras Chrome para verificar (ver memoria `verificacion-preferencia`).
 - **Vercel**: SPA con rewrite de todo a `/index.html` (`vercel.json`) para el routing del lado del cliente.

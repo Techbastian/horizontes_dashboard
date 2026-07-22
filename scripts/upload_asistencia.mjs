@@ -21,6 +21,7 @@ const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Horizontes_Senior_Matriz_Maestra_VF.xlsx');
 const YEAR = 2026;
+const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 
 // Fechas oficiales de los cafés de conocimiento (presenciales, compartidos Junior+Senior+Activación),
 // tomadas del cronograma V9 (hoja "Matriz de horarios"). Keyed por número de café.
@@ -175,9 +176,12 @@ async function main() {
   const enSeguimiento = [...jr, ...sr, ...act];
   const docsSeguimiento = new Set(enSeguimiento.map(p => p.doc));
 
-  // Cohort activo
-  const { data: cohort } = await supabase.from('cohorts').select('id,name').eq('status', 'active')
-    .order('created_at', { ascending: false }).limit(1).single();
+  // Cohorte de Horizontes Senior, fijada por slug. NO usar status='active': la base
+  // aloja varios programas (Círculos de Conocimiento) y "la cohorte activa más
+  // reciente" ya no es la de Horizontes Senior.
+  const { data: cohort, error: cohErr } = await supabase.from('cohorts').select('id,name')
+    .eq('slug_application', COHORT_SLUG).limit(1).single();
+  if (cohErr) throw new Error(`No se encontró la cohorte "${COHORT_SLUG}": ${cohErr.message}`);
   console.log(`✅ Cohort: ${cohort.name} (${cohort.id})`);
   const cohortId = cohort.id;
 

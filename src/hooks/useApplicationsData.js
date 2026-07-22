@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 
+// Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
+// status='active': la base es compartida y ya hay más de un programa activo (Círculos
+// de Conocimiento). Con varios activos, `.eq('status','active').limit(1)` no garantiza
+// cuál devuelve PostgREST y el dashboard podría mostrar los datos del otro programa.
+const PROJECT_SLUG = 'horizontes-senior';
+
+// Círculos de Conocimiento es un programa hermano que comparte la tabla `candidates`:
+// la mayoría de sus participantes son postulantes de HS que no quedaron seleccionados.
+// No hay ningún campo que marque esa continuidad — se deriva cruzando candidate_id.
+const CIRCULOS_COHORT_SLUG = 'circulos-de-conocimiento-i-2026';
+
 export function useApplicationsData() {
   const [applications, setApplications] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
@@ -12,27 +23,31 @@ export function useApplicationsData() {
   const [courseStatus, setCourseStatus] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [sessionAttendance, setSessionAttendance] = useState([]);
+  const [circulosIds, setCirculosIds] = useState(() => new Set());
 
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // 1. Get active project
+      // 1. Proyecto de Horizontes Senior (fijado por slug, ver PROJECT_SLUG)
       const { data: proj, error: projErr } = await supabase
         .from('projects')
         .select('*')
-        .eq('status', 'active')
+        .eq('slug', PROJECT_SLUG)
         .limit(1)
         .single();
       if (projErr) throw projErr;
+      if (!proj) throw new Error(`No se encontró el proyecto con slug "${PROJECT_SLUG}"`);
       setProject(proj);
 
-      // 2. Get active cohort
+      // 2. Cohorte del proyecto. El orden es explícito para que, si algún día hay
+      //    más de una cohorte, siempre se tome la primera y no una al azar.
       const { data: coh, error: cohErr } = await supabase
         .from('cohorts')
         .select('*')
         .eq('program_id', proj.id)
+        .order('created_at', { ascending: true })
         .limit(1)
         .single();
       if (cohErr) throw cohErr;
@@ -111,6 +126,26 @@ export function useApplicationsData() {
       }
       
       setApplications(allApps);
+
+      // 4b. Continuidad hacia Círculos de Conocimiento: solo los candidate_id de sus
+      //     matrículas, para poder señalar qué postulantes de HS siguieron allí.
+      //     Va con maybeSingle() a propósito: si la cohorte no existiera, el dashboard
+      //     de Horizontes Senior debe seguir funcionando igual.
+      const { data: cohCirc } = await supabase
+        .from('cohorts')
+        .select('id')
+        .eq('slug_application', CIRCULOS_COHORT_SLUG)
+        .limit(1)
+        .maybeSingle();
+
+      if (cohCirc) {
+        const { data: circEnrs, error: circErr } = await supabase
+          .from('program_enrollments')
+          .select('candidate_id')
+          .eq('cohort_id', cohCirc.id);
+        if (circErr) console.warn('Could not fetch Círculos enrollments:', circErr.message);
+        else setCirculosIds(new Set((circEnrs || []).map((e) => e.candidate_id).filter(Boolean)));
+      }
 
       // 5. Get course progress (formation phase)
       const { data: csRaw } = await supabase
@@ -309,6 +344,29 @@ export function useApplicationsData() {
     });
     return out;
   }, [sessionAttendance, occurredActivities]);
+
+  // Continuidad HS → Círculos de Conocimiento. Responde a "¿qué pasó con los que
+  // no quedaron seleccionados?": se cruzan los postulantes de HS contra las
+  // matrículas de Círculos. Los que no aparecen en HS llegaron directo por el
+  // formulario de Círculos y nunca se postularon aquí.
+  const continuidadCirculos = useMemo(() => {
+    if (!circulosIds.size) return null;
+    let deHS = 0, rechazados = 0, pendientes = 0;
+    applications.forEach((a) => {
+      const cid = a.candidate?.id;
+      if (!cid || !circulosIds.has(cid)) return;
+      deHS++;
+      if (a.custom_answers?.seguimiento_fases?.elegibilidad === 'rejected') rechazados++;
+      else pendientes++;
+    });
+    return {
+      totalCirculos: circulosIds.size,
+      deHS,
+      nuevos: circulosIds.size - deHS,
+      rechazados,
+      pendientes,
+    };
+  }, [circulosIds, applications]);
 
   // Retiros y casos en riesgo (desde custom_form_data)
   const retiros = useMemo(() => {
@@ -630,7 +688,7 @@ export function useApplicationsData() {
     await fetchData();
   };
 
-  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {

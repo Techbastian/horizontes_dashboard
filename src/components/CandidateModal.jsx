@@ -24,7 +24,7 @@ function getPipelineStatus(fases) {
   });
 }
 
-export default function CandidateModal({ application, onClose, onUpdate }) {
+export default function CandidateModal({ application, onClose, onUpdate, enCirculos = false }) {
   const ca = application.custom_answers || {};
   const fases = ca.seguimiento_fases || {};
   const candidate = application.candidate || {};
@@ -88,6 +88,22 @@ export default function CandidateModal({ application, onClose, onUpdate }) {
               <span className={`badge ${getGrupoBadgeClass(fases.grupo_asignado)}`}>
                 {fases.grupo_asignado || 'Sin asignar'}
               </span>
+              {/* Trazabilidad entre programas: se deriva de las matrículas de
+                  Círculos, no hay campo que lo marque en esta postulación. */}
+              {enCirculos && (
+                <span
+                  className="badge"
+                  title="Esta persona está registrada en el programa Círculos de Conocimiento"
+                  style={{
+                    marginLeft: 8,
+                    background: 'var(--accent-violet-dim)',
+                    color: 'var(--accent-violet)',
+                    border: '1px solid rgba(124,58,237,0.3)',
+                  }}
+                >
+                  🔗 Círculos de Conocimiento
+                </span>
+              )}
             </div>
           </div>
           <button className="modal-close" onClick={onClose}>✕</button>

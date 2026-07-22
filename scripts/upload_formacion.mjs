@@ -10,6 +10,7 @@ const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
 const REPORTES_DIR = resolve(__dirname, '../Reportes formacion');
+const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 
 function getLatestExcel() {
   const files = readdirSync(REPORTES_DIR)
@@ -44,17 +45,18 @@ function readExcel() {
   }));
 }
 
-// ── 2. Obtener cohort activo ───────────────────────────────────────────────────
+// ── 2. Obtener la cohorte de Horizontes Senior ────────────────────────────────
+// Fijada por slug: la base aloja varios programas (Círculos de Conocimiento), así
+// que "la cohorte activa más reciente" ya no es la de Horizontes Senior.
 async function getHorizontesCohort() {
   const { data, error } = await supabase
     .from('cohorts')
     .select('id, name')
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
+    .eq('slug_application', COHORT_SLUG)
     .limit(1)
     .single();
 
-  if (error) throw new Error(`Error buscando cohort activo: ${error.message}`);
+  if (error) throw new Error(`No se encontró la cohorte "${COHORT_SLUG}": ${error.message}`);
   console.log(`\n✅ Usando cohort: ${data.name} (${data.id})`);
   return data.id;
 }
