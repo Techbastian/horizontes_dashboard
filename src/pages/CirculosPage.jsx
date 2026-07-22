@@ -1,8 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import KPICard from '../components/KPICard';
-import DonutChart from '../components/DonutChart';
 import HorizontalBarChart from '../components/HorizontalBarChart';
-import FormationProgressSection from '../components/FormationProgressSection';
 
 const COLOR_MUJERES = '#ec4899';
 const COLOR_HOMBRES = '#3b82f6';
@@ -24,7 +22,7 @@ function TooltipEdad({ active, payload, label }) {
 }
 
 export default function CirculosPage({ circulos }) {
-  const { cohorte, metricas, avancePlataforma, loading, error } = circulos;
+  const { cohorte, metricas, loading, error } = circulos;
 
   if (loading) {
     return (
@@ -70,33 +68,15 @@ export default function CirculosPage({ circulos }) {
         <KPICard label="Edad promedio" value={m.edadPromedio ?? '—'} icon="🎂" change={m.edadMediana} changeLabel="mediana" index={3} />
       </div>
 
-      {/* 1. Distribución por sexo */}
-      <div className="charts-grid" style={{ marginTop: 16 }}>
-        <div className="card">
-          <div className="card-header">
-            <div>
-              <div className="card-title">Distribución por sexo</div>
-              <div className="card-subtitle">Sobre el total de {m.total} participantes</div>
-            </div>
-          </div>
-          <DonutChart
-            data={m.genero}
-            colors={[COLOR_MUJERES, COLOR_HOMBRES, '#94a3b8']}
-            centerValue={`${m.pctMujeres}%`}
-            centerLabel="mujeres"
-            size={200}
-          />
-        </div>
-
-        {/* 3. Nivel profesional */}
-        <div className="card">
-          <HorizontalBarChart
-            data={Object.fromEntries(m.nivelProfesional.map((n) => [n.nombre, n.valor]))}
-            title="Nivel profesional"
-            subtitle={`${m.posgrado} personas con posgrado (especialización, maestría o doctorado)`}
-            maxItems={10}
-          />
-        </div>
+      {/* Nivel profesional. El donut de distribución por sexo se eliminó: los KPI
+          de arriba ya dan mujeres/hombres en % y en personas. */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <HorizontalBarChart
+          data={Object.fromEntries(m.nivelProfesional.map((n) => [n.nombre, n.valor]))}
+          title="Nivel profesional"
+          subtitle={`${m.posgrado} personas con posgrado (especialización, maestría o doctorado)`}
+          maxItems={10}
+        />
       </div>
 
       {/* 2. Edad cruzada con sexo */}
@@ -161,63 +141,21 @@ export default function CirculosPage({ circulos }) {
         </div>
       </div>
 
-      {/* 4. Jefatura de hogar (la métrica de cuidadores no se capturó — ver nota) */}
-      <div className="charts-grid" style={{ marginTop: 16 }}>
-        <div className="card">
-          <HorizontalBarChart
-            data={m.cabezaHogar}
-            title="Jefatura de hogar"
-            subtitle={`${m.cabezaHogar['Sí'] || 0} de ${m.total} participantes sostienen su hogar`}
-            maxItems={4}
-          />
-        </div>
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div className="card-title" style={{ fontSize: 15 }}>Cuidadores: pendiente de capturar</div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.55 }}>
-            El formulario de inscripción no preguntó por labores de cuidado, y las columnas
-            <code style={{ fontSize: 12 }}> caregiving_responsibilities </code> y
-            <code style={{ fontSize: 12 }}> has_dependents </code> están vacías para los {m.total}.
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.55 }}>
-            No se deduce de la jefatura de hogar: son cosas distintas. De las 9 personas que sí
-            constan como cuidadoras, las 9 son cabeza de hogar, pero {m.cabezaHogar['Sí'] || 0}
-            {' '}declararon jefatura — usar ese campo multiplicaría por 18 una cifra que hoy no
-            está medida.
-          </div>
-          <div style={{
-            fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12,
-            borderTop: '1px solid var(--border-subtle)',
-          }}>
-            Se resuelve preguntándolo en el registro de la próxima sesión sincrónica.
-          </div>
-        </div>
+      {/* Jefatura de hogar. La tarjeta de "Cuidadores: pendiente de capturar" se
+          eliminó: explicaba un dato que no existe y se leía como una alerta.
+          El hecho sigue en pie (el formulario no preguntó por labores de cuidado)
+          y no debe deducirse de la jefatura de hogar, que es otra cosa. */}
+      <div className="card" style={{ marginTop: 16 }}>
+        <HorizontalBarChart
+          data={m.cabezaHogar}
+          title="Jefatura de hogar"
+          subtitle={`${m.cabezaHogar['Sí'] || 0} de ${m.total} participantes sostienen su hogar`}
+          maxItems={4}
+        />
       </div>
 
-      {avancePlataforma ? (
-        <FormationProgressSection
-          formationProgress={avancePlataforma}
-          titulo="Avance en plataforma"
-          subtitulo="Progreso individual por curso. Hover sobre la barra para ver el detalle."
-          textoActivos="participantes activos"
-          mostrarTrack={false}
-        />
-      ) : (
-        <div className="card" style={{ marginTop: 24 }}>
-          <div className="card-title" style={{ fontSize: 15 }}>Avance en plataforma: sin datos aún</div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 10, lineHeight: 1.55 }}>
-            Esta sección se llena con el reporte de plataforma. Deja el archivo en
-            <code style={{ fontSize: 12 }}> bases_de_datos/reporte circulos de conocimiento.xlsx </code>
-            y se carga con un ETL, igual que se hace con Horizontes Senior.
-          </div>
-          <div style={{
-            fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12,
-            borderTop: '1px solid var(--border-subtle)',
-          }}>
-            Los cursos de Círculos todavía no están dados de alta en el catálogo: se crean
-            a partir del propio reporte en la primera carga.
-          </div>
-        </div>
-      )}
+      {/* El seguimiento formativo de Círculos vive en /formacion, con el selector
+          de programa. Aquí no se duplica. */}
     </div>
   );
 }

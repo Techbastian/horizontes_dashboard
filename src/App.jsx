@@ -32,7 +32,7 @@ function ErrorScreen({ message, onRetry }) {
 }
 
 export default function App() {
-  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
+  const { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, asistenciaSinCargar, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch } = useApplicationsData();
 
   // Círculos se carga aquí arriba, no dentro de CirculosPage, porque ahora lo
   // consumen dos páginas (/circulos y /formacion): con el hook en cada una se
@@ -81,6 +81,7 @@ export default function App() {
                 formationProgress={formationProgress}
                 attendanceByCandidate={attendanceByCandidate}
                 groupAttendance={groupAttendance}
+                asistenciaSinCargar={asistenciaSinCargar}
                 updateEnrollment={updateEnrollment}
                 circulos={circulos}
               />

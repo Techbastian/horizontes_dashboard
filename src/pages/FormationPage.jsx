@@ -154,7 +154,7 @@ function AttendanceBarChart({ title, items, kind }) {
   );
 }
 
-export default function FormationPage({ enrollments = [], formationProgress, attendanceByCandidate = {}, groupAttendance = {}, updateEnrollment, circulos }) {
+export default function FormationPage({ enrollments = [], formationProgress, attendanceByCandidate = {}, groupAttendance = {}, asistenciaSinCargar = [], updateEnrollment, circulos }) {
   const [programa, setPrograma] = useState('horizontes-senior');
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(true);
