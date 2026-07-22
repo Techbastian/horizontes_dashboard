@@ -1,10 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import {
-  calcularOcurridas,
-  calcularAsistenciaPorCandidato,
-  calcularAsistenciaPorGrupo,
-} from '../lib/asistencia';
+import { calcularAsistencia } from '../lib/asistencia';
+import { PROGRAMA_CIRCULOS } from '../lib/eventos';
 
 // Círculos de Conocimiento vive en su propia cohorte, fijada por slug (nunca por
 // status='active': la base aloja dos programas activos).
@@ -20,6 +17,7 @@ export function useCirculosData() {
   const [cursoEstado, setCursoEstado] = useState([]);
   const [cursos, setCursos] = useState([]);
   const [sessionAttendance, setSessionAttendance] = useState([]);
+  const [eventos, setEventos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -95,6 +93,14 @@ export function useCirculosData() {
         } else hayMas = false;
       }
       setSessionAttendance(todaLaAsistencia);
+
+      // Calendario: define qué sesiones existen, aunque aún no tengan asistencia.
+      const { data: evs, error: evErr } = await supabase
+        .from('eventos')
+        .select('id, nombre, codigo, grupo, tipo, fecha_hora_inicio')
+        .eq('cohort_id', coh.id);
+      if (evErr) console.warn('No se pudieron cargar los eventos de Círculos:', evErr.message);
+      setEventos(evs || []);
 
       // Avance en plataforma. Mismo modelo que Horizontes Senior: una fila por
       // (persona, curso) en cohort_course_status, con el título en
@@ -314,17 +320,25 @@ export function useCirculosData() {
 
   // Mismas formas que expone useApplicationsData, calculadas con el mismo módulo,
   // para que la tabla de Formación no tenga que saber de qué programa viene.
-  const occurredActivities = useMemo(() => calcularOcurridas(sessionAttendance), [sessionAttendance]);
-
-  const attendanceByCandidate = useMemo(
-    () => calcularAsistenciaPorCandidato(sessionAttendance, occurredActivities),
-    [sessionAttendance, occurredActivities]
+  const candidatosAsistencia = useMemo(
+    () => enrollments
+      .filter(e => e.custom_form_data?.elegido !== false && e.candidate?.id)
+      .map(e => ({ candidate_id: e.candidate.id, grupo: e.custom_form_data?.ruta_asignada })),
+    [enrollments]
   );
 
-  const groupAttendance = useMemo(
-    () => calcularAsistenciaPorGrupo(sessionAttendance, occurredActivities),
-    [sessionAttendance, occurredActivities]
+  const asistencia = useMemo(
+    () => calcularAsistencia({
+      filas: sessionAttendance,
+      eventos,
+      programa: PROGRAMA_CIRCULOS,
+      candidatos: candidatosAsistencia,
+    }),
+    [sessionAttendance, eventos, candidatosAsistencia]
   );
+
+  const attendanceByCandidate = asistencia.porCandidato;
+  const groupAttendance = asistencia.porGrupo;
 
   return {
     cohorte,
@@ -334,6 +348,7 @@ export function useCirculosData() {
     avancePlataforma,
     attendanceByCandidate,
     groupAttendance,
+    asistenciaSinCargar: asistencia.sinCargar,
     loading,
     error,
     refetch: fetchData,

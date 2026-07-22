@@ -33,6 +33,16 @@ const norm = (d) => String(d ?? '').replace(/\D/g, '').trim();
 const lc = (s) => String(s ?? '').toLowerCase().trim();
 
 // ── Parseo de una hoja de seguimiento ──────────────────────────────────────
+// ¿La actividad todavía no ha ocurrido? Comparación por cadena 'YYYY-MM-DD'
+// contra hoy en Bogotá (UTC-5 fijo): comparar objetos Date da un día de error,
+// porque `new Date('2026-07-23')` es medianoche UTC y en Colombia eso cae antes
+// del fin del día 22.
+const HOY_BOGOTA = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+function esFutura(fecha) {
+  if (!fecha) return false; // los entregables no tienen fecha
+  return String(fecha).slice(0, 10) > HOY_BOGOTA;
+}
+
 function parseAttendanceValue(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
@@ -241,7 +251,12 @@ async function main() {
     const cafeMotivos = { 1: m?.motivo_cafe_1 || null, 2: m?.motivo_cafe_2 || null };
     const push = (tipo, arr) => arr.forEach((a, i) => plan.attendanceRows.push({
       cohort_id: cohortId, candidate_id: candidateId, grupo: p.grupo,
-      tipo, actividad: a.actividad, fecha: a.fecha, orden: i + 1, asistio: a.asistio,
+      tipo, actividad: a.actividad, fecha: a.fecha, orden: i + 1,
+      // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
+      // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
+      // false hace que el día que llegue la fecha cuente como que faltaron todos
+      // y hunda los porcentajes. null = no registrado (ver src/lib/asistencia.js).
+      asistio: esFutura(a.fecha) ? null : a.asistio,
       observacion: tipo === 'cafe' ? (cafeMotivos[i + 1] || a.observacion || null) : (a.observacion || null),
     }));
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);

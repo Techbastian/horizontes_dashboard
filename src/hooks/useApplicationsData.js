@@ -1,10 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import {
-  calcularOcurridas,
-  calcularAsistenciaPorCandidato,
-  calcularAsistenciaPorGrupo,
-} from '../lib/asistencia';
+import { calcularAsistencia } from '../lib/asistencia';
+import { PROGRAMA_HS } from '../lib/eventos';
 
 // Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
 // status='active': la base es compartida y ya hay más de un programa activo (Círculos
@@ -28,6 +25,7 @@ export function useApplicationsData() {
   const [courseStatus, setCourseStatus] = useState([]);
   const [coursesList, setCoursesList] = useState([]);
   const [sessionAttendance, setSessionAttendance] = useState([]);
+  const [eventos, setEventos] = useState([]);
   const [circulosIds, setCirculosIds] = useState(() => new Set());
 
   const fetchData = async () => {
@@ -185,6 +183,15 @@ export function useApplicationsData() {
         } else saHasMore = false;
       }
       setSessionAttendance(allAttendance);
+
+      // Calendario: define qué actividades EXISTEN, aunque nadie les haya tomado
+      // asistencia todavía (ver src/lib/asistencia.js).
+      const { data: evs, error: evErr } = await supabase
+        .from('eventos')
+        .select('id, nombre, codigo, grupo, tipo, fecha_hora_inicio')
+        .eq('cohort_id', coh.id);
+      if (evErr) console.warn('Could not fetch eventos:', evErr.message);
+      setEventos(evs || []);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError(err.message || 'Error al cargar datos');
@@ -271,17 +278,28 @@ export function useApplicationsData() {
   }, [courseStatus, coursesList, enrollments]);
 
   // El cálculo vive en src/lib/asistencia.js porque lo comparten los dos programas.
-  const occurredActivities = useMemo(() => calcularOcurridas(sessionAttendance), [sessionAttendance]);
-
-  const attendanceByCandidate = useMemo(
-    () => calcularAsistenciaPorCandidato(sessionAttendance, occurredActivities),
-    [sessionAttendance, occurredActivities]
+  // Los candidatos vienen de las matrículas: sin ellos, una actividad del calendario
+  // sin filas no sabría a quién corresponde y no aparecería en la tabla.
+  const candidatosAsistencia = useMemo(
+    () => enrollments
+      .filter(e => e.custom_form_data?.elegido !== false && e.candidate?.id)
+      .map(e => ({ candidate_id: e.candidate.id, grupo: e.custom_form_data?.ruta_asignada })),
+    [enrollments]
   );
 
-  const groupAttendance = useMemo(
-    () => calcularAsistenciaPorGrupo(sessionAttendance, occurredActivities),
-    [sessionAttendance, occurredActivities]
+  const asistencia = useMemo(
+    () => calcularAsistencia({
+      filas: sessionAttendance,
+      eventos,
+      programa: PROGRAMA_HS,
+      candidatos: candidatosAsistencia,
+    }),
+    [sessionAttendance, eventos, candidatosAsistencia]
   );
+
+  const attendanceByCandidate = asistencia.porCandidato;
+  const groupAttendance = asistencia.porGrupo;
+  const asistenciaSinCargar = asistencia.sinCargar;
 
   // Continuidad HS → Círculos de Conocimiento. Responde a "¿qué pasó con los que
   // no quedaron seleccionados?": se cruzan los postulantes de HS contra las
@@ -626,7 +644,7 @@ export function useApplicationsData() {
     await fetchData();
   };
 
-  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
+  return { applications, enrollments, project, cohort, metrics, formationProgress, attendanceByCandidate, groupAttendance, asistenciaSinCargar, retiros, continuidadCirculos, circulosIds, loading, error, updateApplication, updateEnrollment, refetch: fetchData };
 }
 
 function getEnrolledAgeRange(age) {

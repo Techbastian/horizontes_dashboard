@@ -31,20 +31,32 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const COHORT_ID = '386dcf50-e269-4b5b-b248-aaa754dbd0aa'; // Círculos de Conocimiento I
 const GRUPO = 'Círculos'; // grupo único: los 263 no están subdivididos
 
-// Una entrada por sesión con formulario. `actividad` debe coincidir con el
-// `codigo` del evento para que la app edite la misma fila al tomar asistencia
-// desde el calendario, en vez de crear una nueva.
+// TODAS las sesiones del programa, no solo las que ya tienen formulario: las
+// futuras necesitan sus filas creadas (con asistio=null) para que el dashboard
+// sepa que existen y las pinte en gris. Sin fila, la sesión es invisible —
+// "1 de 1 realizadas" en vez de "1 de 5". Es el mismo mecanismo de HS.
+//
+// `actividad` debe coincidir con el `codigo` del evento para que la app edite la
+// misma fila al tomar asistencia desde el calendario, en vez de crear una nueva.
+const COLUMNAS_FORMULARIO = {
+  email: 'Correo electrónico',
+  nombre: 'Nombre(s) completo(s) y apellido(s)',
+  doc: 'Número de cédula de ciudadanía (o documento de identidad, sin puntos ni comas)',
+};
+
 const SESIONES = [
   {
     actividad: 'C-S01',
     fecha: '2026-07-21',
     archivo: 'Asistencia Sesión Inicial  21-07.xlsx',
-    columnas: {
-      email: 'Correo electrónico',
-      nombre: 'Nombre(s) completo(s) y apellido(s)',
-      doc: 'Número de cédula de ciudadanía (o documento de identidad, sin puntos ni comas)',
-    },
+    columnas: COLUMNAS_FORMULARIO,
   },
+  // Sin `archivo` = aún no hay formulario. Solo se crean las filas que falten,
+  // nunca se pisan las que ya tengan asistencia registrada desde la app.
+  { actividad: 'C-S02', fecha: '2026-07-29' },
+  { actividad: 'C-S03', fecha: '2026-08-06' },
+  { actividad: 'C-S04', fecha: '2026-08-11' },
+  { actividad: 'C-S05', fecha: '2026-08-18' },
 ];
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -112,6 +124,16 @@ async function main() {
   }
   console.log(`\n  Matriculados en Círculos: ${enrs.length}`);
 
+  // Lo ya registrado, para no pisar asistencia capturada desde la app en las
+  // sesiones que aquí solo llevan marcador de posición.
+  const { data: yaRegistrado, error: yaErr } = await supabase
+    .from('session_attendance')
+    .select('candidate_id, actividad, asistio')
+    .eq('cohort_id', COHORT_ID)
+    .eq('grupo', GRUPO);
+  if (yaErr) throw yaErr;
+  const existentes = new Set((yaRegistrado || []).map((r) => `${r.actividad}|${r.candidate_id}`));
+
   const filasAEscribir = [];
   const sinResolver = [];
 
@@ -123,6 +145,30 @@ async function main() {
       .eq('cohort_id', COHORT_ID)
       .eq('codigo', sesion.actividad)
       .maybeSingle();
+
+    const etiquetaEvento = evento ? `(evento: ${evento.nombre})` : '⚠️ sin evento en el calendario';
+    console.log(`\n  ── ${sesion.actividad} · ${sesion.fecha} ${etiquetaEvento}`);
+
+    if (!sesion.archivo) {
+      // Sesión sin formulario: solo marcador de posición para las filas que falten.
+      const nuevas = enrs.filter((e) => !existentes.has(`${sesion.actividad}|${e.candidate_id}`));
+      console.log(`     sin formulario todavía · filas a crear: ${nuevas.length} · ya existentes: ${enrs.length - nuevas.length}`);
+      for (const e of nuevas) {
+        filasAEscribir.push({
+          cohort_id: COHORT_ID,
+          candidate_id: e.candidate_id,
+          grupo: GRUPO,
+          tipo: 'sesion',
+          actividad: sesion.actividad,
+          fecha: sesion.fecha,
+          orden: null,
+          asistio: null, // null = no registrado; la fecha futura la pinta en gris
+          observacion: null,
+          evento_id: evento?.id ?? null,
+        });
+      }
+      continue;
+    }
 
     const asistentes = leerFormulario(sesion);
     const presentes = new Map(); // candidate_id → cómo se resolvió
@@ -138,7 +184,6 @@ async function main() {
       if (!presentes.has(r.e.candidate_id)) presentes.set(r.e.candidate_id, r.via);
     }
 
-    console.log(`\n  ── ${sesion.actividad} · ${sesion.fecha} ${evento ? `(evento: ${evento.nombre})` : '⚠️ sin evento en el calendario'}`);
     console.log(`     filas en el formulario : ${asistentes.length}`);
     console.log(`     asistentes únicos      : ${presentes.size}`);
     console.log(`     ausentes (marcados no) : ${enrs.length - presentes.size}`);

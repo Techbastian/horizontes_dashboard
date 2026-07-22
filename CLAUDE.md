@@ -19,7 +19,8 @@ npm run preview    # previsualiza el build
 
 # ETL con DRY RUN por defecto (upload_asistencia, upload_asistencia_circulos,
 #                              upload_circulos, upload_eventos,
-#                              upload_eventos_circulos, upload_retiros)
+#                              upload_eventos_circulos, upload_retiros,
+#                              limpiar_marcadores_asistencia)
 node scripts/upload_asistencia.mjs            # dry run (no escribe)
 node scripts/upload_asistencia.mjs --commit   # escribe
 node scripts/diagnostico.mjs [enrollments|ids|join|rutas]   # inspección read-only; sin arg corre todo
@@ -80,7 +81,13 @@ candidates → socio_demographic_data (1:1)
 
 ### Tres reglas de negocio críticas (viven en JS, no en los datos)
 1. **`elegido`**: solo aparecen en Formación/selección quienes fueron elegidos. La UI filtra `custom_form_data.elegido !== false` en varios sitios (FormationPage, metrics.transiciones, CandidateTable). Los enrollments con `elegido:false` son heredados/erróneos y no deben mostrarse.
-2. **"Ocurridas vs pendientes"** (`src/lib/asistencia.js`, usado por los dos programas): el % de asistencia **solo cuenta actividades cuya fecha ya pasó**; las futuras van en gris y no entran ni al numerador ni al denominador. Los entregables cuentan una vez que alguien del grupo ya entregó. El total ponderado (sesiones 35% / cafés 40% / entregables 25%) se **renormaliza** sobre los componentes ya ocurridos — por eso en Círculos, que solo tiene sesiones, el total sale igual al % de sesiones sin necesidad de un caso especial. FormationPage usa estos valores calculados, no el `attendance_percentage` crudo.
+2. **"Ocurridas vs pendientes"** (`src/lib/asistencia.js`, usado por los dos programas). Cuatro cosas que van juntas:
+   - **Qué actividades existen lo define el CALENDARIO**, no la tabla de asistencia: un evento marcado como sesión/nivelación/café ya cuenta aunque nadie le haya tomado asistencia. Antes dependía de que un ETL pre-creara las filas, y una sesión sin filas era invisible ("1 de 1 realizadas" en vez de "1 de 5"). **Agregar una sesión = crear el evento en el calendario**, sin correr nada.
+   - **Es una UNIÓN con lo registrado, no un reemplazo.** Los entregables no son eventos de calendario (no tienen fecha) y se perderían: 3 actividades con datos reales en HS.
+   - **Corte por grupo:** no se esperan actividades de un grupo anteriores a su primer registro. Los cafés son eventos `Compartido` y se desdoblan en los tres grupos de HS, pero Activación arrancó el 08/07 — sin el corte figuraría faltando a los cafés 1 y 2, de mayo y junio.
+   - Una actividad cuenta si su **fecha ya pasó Y tiene al menos un registro** (`asistio !== null`). Así, una sesión ya realizada pero sin cargar sigue en gris en vez de entrar al denominador con todos en `null` y hundir los porcentajes; `sinCargar` alimenta un aviso en FormationPage. Y a nivel de persona, `asistio === null` es "no se le midió", no "faltó" — por eso los 12 retirados de HS sin seguimiento muestran "—" y no 0%.
+
+   Los entregables cuentan una vez que alguien del grupo ya entregó. El total ponderado (sesiones 35% / cafés 40% / entregables 25%) se **renormaliza** sobre los componentes ya ocurridos — por eso en Círculos, que solo tiene sesiones, el total sale igual al % de sesiones sin necesidad de un caso especial. FormationPage usa estos valores calculados, no el `attendance_percentage` crudo.
 3. **En Círculos manda lo respondido en Círculos.** Para los 249 que venían de HS, los campos compartidos de `candidates` (`gender`, `education_level`, `city`) conservan el valor heredado, que contradice el formulario de Círculos en varios casos (43 en escolaridad — el vocabulario de HS no tenía "Maestría"; 2 en sexo). `useCirculosData` lee primero `caracterizacion.*` y solo cae a los campos compartidos como respaldo. No "simplifiques" ese fallback. En la misma línea: el formulario de Círculos **no preguntó por cuidadores**, así que la página reporta jefatura de hogar como lo que es y no la hace pasar por el dato de cuidadores.
 
 ### Páginas (rutas en `App.jsx`, `react-router-dom` v7)
@@ -92,6 +99,7 @@ candidates → socio_demographic_data (1:1)
 - **Estilos: un solo `src/index.css`** (~2.000 líneas) con variables CSS en `:root` (tema claro, acentos teal/violeta) y clases globales (`.card`, `.kpi-*`, `.grp-junior`…). No hay Tailwind ni CSS modules; los componentes combinan `className` con `style` inline para lo puntual. Al agregar UI, reutiliza las clases y variables existentes antes de inventar colores.
 - **Archivos plantilla Vite sin usar** — ignóralos y no los importes: `src/counter.ts`, `src/main.ts`, `src/style.css`, `src/assets/{vite,typescript}.svg`. El entry real es `src/main.jsx` → importa `src/index.css`.
 - **Organización de scripts** (`scripts/`, carpeta única): un ETL por dominio (no fusionar `upload_*`, cada uno parsea un Excel distinto con lógica extensa). Los diagnósticos read-only nuevos van como **sub-comando dentro de `diagnostico.mjs`**, no como archivo suelto. Temporales de exploración → scratchpad de la sesión, no en el repo.
+- **Fechas: compara cadenas `'YYYY-MM-DD'`, nunca objetos `Date`.** `new Date('2026-07-23')` es medianoche **UTC**, que en Colombia (UTC-5) cae antes del fin del día 22: comparar con `new Date()` daba por ocurrida una actividad un día antes, y eso hacía que el café del día siguiente entrara al promedio con 0% de asistencia. Estuvo activo en producción. `yaPaso()` en `src/lib/asistencia.js` compara cadenas contra hoy-en-Bogotá.
 - **`bases_de_datos/`** (fuentes Excel de los ETL) está **gitignored**. Los scripts esperan encontrar ahí `Horizontes_Senior_Matriz_Maestra_VF.xlsx`, `V9_CronogramaFormación_H_S.xlsx`, etc.
 - **Nunca resuelvas el programa o la cohorte por `status='active'`.** Hay dos programas activos; sin `ORDER BY`, PostgREST no garantiza cuál devuelve, y `.single()` falla directamente. Cada consumidor se fija a su destino explícitamente y conviene mantener ese constante al inicio del archivo, no inline:
   - hooks del frontend → `PROJECT_SLUG='horizontes-senior'`, `CIRCULOS_COHORT_SLUG='circulos-de-conocimiento-i-2026'` (contra `cohorts.slug_application`).

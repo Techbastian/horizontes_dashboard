@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
 
+
 // Cada programa trae sus propios grupos. Horizontes Senior se divide en rutas;
 // Círculos de Conocimiento es un grupo único de 263 personas sin subdividir.
 const PROGRAMAS = {
@@ -172,8 +173,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         formationProgress: circulos?.avancePlataforma || null,
         attendanceByCandidate: circulos?.attendanceByCandidate || {},
         groupAttendance: circulos?.groupAttendance || {},
+        asistenciaSinCargar: circulos?.asistenciaSinCargar || [],
       }
-    : { enrollments, formationProgress, attendanceByCandidate, groupAttendance };
+    : { enrollments, formationProgress, attendanceByCandidate, groupAttendance, asistenciaSinCargar };
 
   // Al cambiar de programa cambian los grupos: la pestaña anterior no existe.
   const cambiarPrograma = (slug) => {
@@ -263,6 +265,14 @@ export default function FormationPage({ enrollments = [], formationProgress, att
     return { realizadas, total: ses.length, lastFecha };
   }, [datos.groupAttendance, activeTab]);
 
+  // Sesiones cuya fecha ya pasó pero que siguen sin asistencia cargada. Quedan en
+  // gris (no hunden los porcentajes), pero sin aviso se olvidarían en silencio.
+  // Lo calcula src/lib/asistencia.js; aquí solo se acota al grupo visible.
+  const sinCargar = useMemo(
+    () => (datos.asistenciaSinCargar || []).filter(s => s.grupo === activeTab),
+    [datos.asistenciaSinCargar, activeTab]
+  );
+
   const meta = GROUP_META[activeTab];
   const st = groupStats[activeTab] || {};
 
@@ -315,6 +325,31 @@ export default function FormationPage({ enrollments = [], formationProgress, att
           );
         })}
       </div>
+
+      {sinCargar.length > 0 && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16, padding: '14px 18px', display: 'flex', gap: 12,
+            alignItems: 'flex-start', borderLeft: '3px solid var(--accent-amber)',
+          }}
+        >
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+              {sinCargar.length === 1
+                ? 'Hay una actividad sin asistencia cargada'
+                : `Hay ${sinCargar.length} actividades sin asistencia cargada`}
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
+              {sinCargar.map(s => `${s.actividad} (${fechaCorta(s.fecha) || 'sin fecha'})`).join(' · ')}
+              {' '}— ya {sinCargar.length === 1 ? 'ocurrió' : 'ocurrieron'} pero no {sinCargar.length === 1 ? 'tiene' : 'tienen'} ningún
+              registro, así que {sinCargar.length === 1 ? 'sigue' : 'siguen'} en gris y no {sinCargar.length === 1 ? 'cuenta' : 'cuentan'} en
+              los porcentajes. Toma la asistencia desde Eventos o carga el formulario.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Panel del grupo activo */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 24 }}>
