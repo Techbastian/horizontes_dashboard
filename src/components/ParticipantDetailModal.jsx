@@ -20,6 +20,20 @@ function ProgressBar({ pct }) {
 
 const RUTAS = ['Senior', 'Junior', 'Activación'];
 
+// Las mismas seis categorías que clasifica scripts/upload_retiros.mjs. RetirosPage
+// agrupa por este campo: inventar una categoría nueva aquí la dejaría fuera de los
+// gráficos, así que el vocabulario se mantiene idéntico al del ETL.
+const CATEGORIAS_RETIRO = [
+  'Situación laboral',
+  'Salud',
+  'Metodología / contenido',
+  'Sin contacto',
+  'Tiempo / disponibilidad',
+  'Voluntario / personal',
+];
+
+const hoyBogota = () => new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+
 // Semáforo de asistencia por actividad
 function AttendanceDots({ items, labelPrefix }) {
   if (!items || !items.length) return null;
@@ -58,16 +72,56 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Motivo del retiro. Si ya venía uno cargado (de la plantilla de PQRS) se
+  // precarga para poder corregirlo en vez de escribirlo de cero.
+  const [categoria, setCategoria] = useState(
+    CATEGORIAS_RETIRO.includes(profile.retiro?.categoria) ? profile.retiro.categoria : 'Voluntario / personal'
+  );
+  const [motivo, setMotivo] = useState(profile.retiro?.motivo || '');
+  const [fechaRetiro, setFechaRetiro] = useState(profile.retiro?.fecha || hoyBogota());
+
   const canSave = !!onSave;
-  const hasChanges = ruta !== profile.ruta || isActive !== profile.isActive;
+  const seVaAInactivar = !isActive;
+  const motivoLimpio = motivo.trim();
+
+  const cambioMotivo =
+    seVaAInactivar &&
+    (motivoLimpio !== (profile.retiro?.motivo || '') ||
+      categoria !== (profile.retiro?.categoria || '') ||
+      fechaRetiro !== (profile.retiro?.fecha || ''));
+
+  const hasChanges = ruta !== profile.ruta || isActive !== profile.isActive || cambioMotivo;
+
+  // Al inactivar se exige el motivo: un retiro sin razón no sirve para nada en la
+  // página de Retiros, y es el momento en que se sabe. Reactivar no lo pide.
+  const faltaMotivo = seVaAInactivar && !motivoLimpio;
 
   const handleSave = async () => {
     if (!onSave) return;
     setSaving(true);
     setError(null);
     try {
+      const custom = { ruta_asignada: ruta, estado_activo: isActive };
+
+      if (seVaAInactivar) {
+        custom.retiro = {
+          categoria,
+          motivo: motivoLimpio,
+          fecha: fechaRetiro || hoyBogota(),
+          nivel: ruta,
+          // Deja rastro de que se registró desde el dashboard y no desde la
+          // plantilla de PQRS, por si después hay que reconciliar las dos fuentes.
+          origen: 'dashboard',
+        };
+      } else if (profile.retiro) {
+        // Reactivar y dejar el `retiro` puesto lo mantendría en la página de
+        // Retiros contradiciendo su estado. Se archiva en vez de borrarse.
+        custom.retiro = null;
+        custom.retiro_anterior = profile.retiro;
+      }
+
       await onSave(profile.id, {
-        custom_form_data: { ruta_asignada: ruta, estado_activo: isActive },
+        custom_form_data: custom,
         status: isActive ? 'active' : 'inactive',
       });
       onClose();
@@ -165,8 +219,9 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
             </div>
           )}
 
-          {/* Motivo de retiro */}
-          {profile.retiro && (
+          {/* Motivo de retiro, en solo lectura. Se oculta cuando abajo aparece el
+              formulario editable con estos mismos datos, para no mostrarlo dos veces. */}
+          {profile.retiro && !(canSave && seVaAInactivar) && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
                 🚪 Motivo de retiro
@@ -359,6 +414,84 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                 </div>
               </div>
             </div>
+
+            {/* Motivo del retiro: solo al inactivar. Alimenta la página de Retiros. */}
+            {seVaAInactivar && (
+              <div style={{
+                marginTop: 16, padding: '16px 18px', borderRadius: 10,
+                background: '#ffffff', border: '1px solid #fecaca',
+                borderLeft: '3px solid #ef4444',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                  Motivo del retiro
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14 }}>
+                  Queda registrado en la página de Retiros y en el histórico de la persona.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Categoría</label>
+                    <select
+                      value={categoria}
+                      onChange={e => setCategoria(e.target.value)}
+                      style={{
+                        width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                        borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 14,
+                        outline: 'none', cursor: 'pointer',
+                      }}
+                    >
+                      {CATEGORIAS_RETIRO.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Fecha</label>
+                    <input
+                      type="date"
+                      value={fechaRetiro}
+                      onChange={e => setFechaRetiro(e.target.value)}
+                      style={{
+                        width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                        borderRadius: 8, padding: '8px 10px', color: '#0f172a', fontSize: 14,
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>
+                  Comentario
+                </label>
+                <textarea
+                  value={motivo}
+                  onChange={e => setMotivo(e.target.value)}
+                  rows={3}
+                  placeholder="Qué pasó, cómo se supo, con quién se habló…"
+                  style={{
+                    width: '100%', background: '#ffffff', border: `1px solid ${faltaMotivo ? '#ef4444' : '#cbd5e1'}`,
+                    borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 13.5,
+                    outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5,
+                  }}
+                />
+                {faltaMotivo && (
+                  <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
+                    Escribe el motivo para poder guardar el retiro.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reactivar a alguien que estaba retirado: se avisa qué pasa con el motivo. */}
+            {!seVaAInactivar && profile.retiro && (
+              <div style={{
+                marginTop: 16, padding: '12px 16px', borderRadius: 10,
+                background: '#ffffff', border: '1px solid #e2e8f0', borderLeft: '3px solid #10b981',
+                fontSize: 12.5, color: '#475569', lineHeight: 1.55,
+              }}>
+                Al reactivar, el motivo de retiro deja de contar en la página de Retiros,
+                pero se conserva en el histórico de la persona.
+              </div>
+            )}
           </div>
 
           {error && (
@@ -377,12 +510,13 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
             </button>
             <button
               onClick={handleSave}
-              disabled={!hasChanges || saving || !canSave}
+              disabled={!hasChanges || saving || !canSave || faltaMotivo}
               style={{
                 padding: '9px 24px', borderRadius: 8, border: 'none',
-                background: hasChanges && !saving && canSave ? '#0d9488' : '#e2e8f0',
-                color: hasChanges && !saving && canSave ? '#fff' : '#475569',
-                fontSize: 13, fontWeight: 600, cursor: hasChanges && !saving && canSave ? 'pointer' : 'not-allowed',
+                background: hasChanges && !saving && canSave && !faltaMotivo ? '#0d9488' : '#e2e8f0',
+                color: hasChanges && !saving && canSave && !faltaMotivo ? '#fff' : '#475569',
+                fontSize: 13, fontWeight: 600,
+                cursor: hasChanges && !saving && canSave && !faltaMotivo ? 'pointer' : 'not-allowed',
                 transition: 'all 0.15s',
               }}
             >
