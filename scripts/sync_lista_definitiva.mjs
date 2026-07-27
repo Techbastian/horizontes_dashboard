@@ -1,20 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
 const COHORT_SLUG   = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 const LISTA_PATH    = resolve(__dirname, '../Reportes formacion/Lista definitva.xlsx');
 const ESTADO_PATH   = resolve(__dirname, '../Reportes formacion/estado_detallado_estudiantes_07mayo.xlsx');
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
-const normalizeDoc = (d) => String(d ?? '').replace(/[.\s,\-]/g, '').trim();
+const normalizeDoc = (d) => String(d ?? '').replace(/[.\s,-]/g, '').trim();
 const normalizeEmail = (e) => String(e ?? '').toLowerCase().trim();
 
 // ── 1. Leer Lista definitiva ───────────────────────────────────────────────────

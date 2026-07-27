@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { resolve, dirname, extname } from 'path';
@@ -6,8 +7,6 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
 const REPORTES_DIR = resolve(__dirname, '../Reportes formacion');
 const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
@@ -25,7 +24,8 @@ function getLatestExcel() {
 
 const EXCEL_PATH = getLatestExcel();
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
 // ── 1. Leer Excel ──────────────────────────────────────────────────────────────
 function readExcel() {

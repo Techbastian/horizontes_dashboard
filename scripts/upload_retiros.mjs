@@ -5,18 +5,18 @@
 //   node scripts/upload_retiros.mjs --commit   → escribe
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMMIT = process.argv.includes('--commit');
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL = resolve(__dirname, '../bases_de_datos/Plantilla de Trazabilidad de PQRS_HorizontesSenior.xlsx');
 const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 const norm = d => String(d ?? '').replace(/\D/g, '').trim();
 const clean = s => String(s ?? '').replace(/\s+/g, ' ').trim();
 const serialToISO = (v) => {

@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 bases_de_datos/
+# Credenciales: nunca versionar. Ver .env.example
+.env
+.env.local

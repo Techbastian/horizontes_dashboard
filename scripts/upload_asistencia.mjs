@@ -10,6 +10,8 @@
 //   • Ruta inicial / historial   → hoja "Matriz Maestra"
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
+import { grupoEnFecha, rutaActual } from '../src/lib/rutas.js';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -17,8 +19,6 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMMIT = process.argv.includes('--commit');
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Horizontes_Senior_Matriz_Maestra_VF.xlsx');
 const YEAR = 2026;
 const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
@@ -28,7 +28,8 @@ const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Sen
 // Permiten aplicar la misma regla de "gris si no ha pasado" que a las sesiones.
 const CAFE_FECHAS = { 1: '2026-05-21', 2: '2026-06-23', 3: '2026-07-23', 4: '2026-08-26', 5: '2026-09-24', 6: '2026-10-22' };
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 const norm = (d) => String(d ?? '').replace(/\D/g, '').trim();
 const lc = (s) => String(s ?? '').toLowerCase().trim();
 
@@ -88,8 +89,12 @@ function parseSeguimiento(wb, sheetName, grupo) {
         lastActivity = { actividad: col.trim(), fecha: extractDate(col), asistio: parseAttendanceValue(val), observacion: null };
         sesiones.push(lastActivity);
       } else if (/^caf[eé]/i.test(col)) {
+        // El número del café se guarda: NO se puede usar la posición en la hoja.
+        // La hoja de Activación empieza en el Café 3 (el grupo arrancó el 08/07),
+        // así que por posición el Café 3 recibiría la fecha, el orden y el motivo
+        // del Café 1.
         const numCafe = parseInt(String(col).match(/\d+/)?.[0], 10);
-        lastActivity = { actividad: col.trim(), fecha: CAFE_FECHAS[numCafe] || null, asistio: parseAttendanceValue(val), observacion: null };
+        lastActivity = { actividad: col.trim(), num: numCafe || null, fecha: CAFE_FECHAS[numCafe] || null, asistio: parseAttendanceValue(val), observacion: null };
         cafes.push(lastActivity);
       } else if (/^entregable/i.test(col)) {
         lastActivity = { actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val), observacion: null };
@@ -104,6 +109,13 @@ function parseSeguimiento(wb, sheetName, grupo) {
       email: lc(r['Correo Electrónico']),
       name: (r['Nombre Completo'] || '').trim(),
       grupo,
+      // "Estado final" de la hoja. ANTES se ignoraba y se daba por activo a todo
+      // el que apareciera en una hoja: los retirados siguen listados ahí (16 al
+      // 2026-07-27, marcados INACTIVO en el propio Excel), así que cada corrida
+      // los resucitaba —incluidos los retiros registrados desde el dashboard, que
+      // quedaban activos y con su objeto `retiro` puesto a la vez.
+      // Vacío o ausente = activo, que era el comportamiento anterior.
+      activo: !/^inactiv/i.test(String(r['Estado final'] ?? '').trim()),
       sesiones, cafes, entregables,
       pond_sesiones: num(r['Ponderado Asistencia sesiones 35%']),
       pond_cafes: num(r['Ponderado asistencia cafés 40%']),
@@ -221,13 +233,13 @@ async function main() {
     const candidateId = resolveCandidate(p);
     if (!candidateId) { plan.sinCandidato.push(p); continue; }
     const m = matriz.get(p.doc);
-    const hist = derivarHistorial(p.grupo, m);
+    const hist = derivarHistorial(p.activo ? p.grupo : 'Inactivo', m);
 
     const custom = {
       cedula: p.doc,
       nombre_completo: p.name,
       ruta_asignada: p.grupo,
-      estado_activo: true,
+      estado_activo: p.activo,
       elegido: true,
       ...hist,
       motivo_cambio: m?.cambio_nivel_texto || null,
@@ -241,23 +253,42 @@ async function main() {
 
     const existing = enrByCand.get(candidateId);
     if (existing) {
-      plan.updateEnrollments.push({ id: existing.id, candidateId, grupo: p.grupo, custom: { ...(existing.custom_form_data || {}), ...custom }, attendance_percentage, status: 'active' });
+      // El grupo de este script sale de la HOJA del Excel, que sigue reflejando el
+      // reparto original. Si a la persona ya se le escribió un `historial_ruta`
+      // (la movieron de grupo desde el dashboard o con
+      // reclasificar_activacion_junior.mjs), ese historial manda: pisar
+      // `ruta_asignada` con la hoja la devolvería a su grupo viejo y desharía la
+      // migración. Las filas de session_attendance no corren ese riesgo porque
+      // llevan el grupo de la hoja, que es donde de verdad ocurrió la actividad.
+      const previo = existing.custom_form_data || {};
+      const conservado = Array.isArray(previo.historial_ruta) && previo.historial_ruta.length
+        ? { ruta_asignada: rutaActual(previo), historial_ruta: previo.historial_ruta }
+        : {};
+      plan.updateEnrollments.push({ id: existing.id, candidateId, grupo: p.grupo, custom: { ...previo, ...custom, ...conservado }, attendance_percentage, status: p.activo ? 'active' : 'inactive' });
     } else {
-      plan.insertEnrollments.push({ candidateId, grupo: p.grupo, custom, attendance_percentage, doc: p.doc, name: p.name });
+      plan.insertEnrollments.push({ candidateId, grupo: p.grupo, custom, attendance_percentage, doc: p.doc, name: p.name, status: p.activo ? 'active' : 'inactive' });
     }
 
     // Filas de asistencia. Cada actividad lleva su propia observación (viene pegada a su columna
     // en la hoja de seguimiento). Para cafés, el motivo de la Matriz Maestra (Café 1 y 2) tiene prioridad.
     const cafeMotivos = { 1: m?.motivo_cafe_1 || null, 2: m?.motivo_cafe_2 || null };
+    // El grupo de cada fila es el grupo donde OCURRIÓ la actividad, no el de la
+    // hoja: quien pasó de Activación a Junior el 23/07 hizo las sesiones de julio
+    // como Activación pero el Café 3 (23/07) ya como Junior. Sin historial —el
+    // caso de casi todos— `grupoEnFecha` no resuelve nada y manda la hoja, igual
+    // que siempre. Las actividades sin fecha (entregables) tampoco se pueden
+    // ubicar en el tiempo: se quedan con el grupo de la hoja.
+    const cfPrevio = existing?.custom_form_data || null;
+    const grupoDe = (fecha) => (cfPrevio && grupoEnFecha(cfPrevio, fecha)) || p.grupo;
     const push = (tipo, arr) => arr.forEach((a, i) => plan.attendanceRows.push({
-      cohort_id: cohortId, candidate_id: candidateId, grupo: p.grupo,
-      tipo, actividad: a.actividad, fecha: a.fecha, orden: i + 1,
+      cohort_id: cohortId, candidate_id: candidateId, grupo: grupoDe(a.fecha),
+      tipo, actividad: a.actividad, fecha: a.fecha, orden: a.num ?? i + 1,
       // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
       // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
       // false hace que el día que llegue la fecha cuente como que faltaron todos
       // y hunda los porcentajes. null = no registrado (ver src/lib/asistencia.js).
       asistio: esFutura(a.fecha) ? null : a.asistio,
-      observacion: tipo === 'cafe' ? (cafeMotivos[i + 1] || a.observacion || null) : (a.observacion || null),
+      observacion: tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion || null) : (a.observacion || null),
     }));
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
   }
@@ -308,6 +339,8 @@ async function main() {
   console.log(`\n${'─'.repeat(70)}\n  RESUMEN DEL PLAN\n${'─'.repeat(70)}`);
   const byGrupo = (arr) => { const g = {}; arr.forEach(x => g[x.grupo] = (g[x.grupo] || 0) + 1); return JSON.stringify(g); };
   console.log(`  Enrollments a ACTUALIZAR (en hoja):     ${plan.updateEnrollments.length}  ${byGrupo(plan.updateEnrollments)}`);
+  const inactivosEnHoja = plan.updateEnrollments.filter(x => x.status === 'inactive');
+  console.log(`       de ellos, marcados INACTIVO en la hoja: ${inactivosEnHoja.length} (NO se reactivan)`);
   console.log(`  Enrollments a CREAR (Activación nuevos): ${plan.insertEnrollments.length}  ${byGrupo(plan.insertEnrollments)}`);
   console.log(`  INACTIVOS que SÍ fueron elegidos (aparecen): ${inactivos.length}`);
   inactivos.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
@@ -335,7 +368,7 @@ async function main() {
   // 1. Crear enrollments Activación
   for (const ins of plan.insertEnrollments) {
     const { error } = await supabase.from('program_enrollments').insert({
-      cohort_id: cohortId, candidate_id: ins.candidateId, status: 'active',
+      cohort_id: cohortId, candidate_id: ins.candidateId, status: ins.status,
       custom_form_data: ins.custom, attendance_percentage: ins.attendance_percentage, enrolled_at: new Date().toISOString(),
     });
     if (error) console.warn(`   ⚠️ insert ${ins.doc}: ${error.message}`);

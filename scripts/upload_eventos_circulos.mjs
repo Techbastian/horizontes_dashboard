@@ -14,11 +14,10 @@
 // desde la UI, que van sin código.
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 
 const COMMIT = process.argv.includes('--commit');
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
 // Cohorte "Círculos de Conocimiento I". Explícita, nunca por status='active':
 // la base aloja dos programas activos (ver CLAUDE.md).
@@ -59,7 +58,8 @@ const CALENDARIO = [
 // porque `session_attendance.evento_id` es ON DELETE SET NULL.
 const CODIGOS_OBSOLETOS = ['C-AP'];
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
 async function main() {
   const { data: coh, error: cohErr } = await supabase

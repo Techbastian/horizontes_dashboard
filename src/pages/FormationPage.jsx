@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
+import { fasesDeMatricula, rutaActual } from '../lib/rutas';
 
 
 // Cada programa trae sus propios grupos. Horizontes Senior se divide en rutas;
@@ -98,8 +99,25 @@ function AttendanceLegend() {
   );
 }
 
-// Badge que cuenta la historia de la persona (transición de nivel)
+// Badge que cuenta la historia de la persona (transición de nivel).
+// Con historial de rutas manda el historial: es el registro real de por dónde
+// pasó. `cambio_nivel` —texto suelto que escribió el ETL legacy— queda de
+// respaldo para quien nunca cambió de grupo desde el dashboard.
 function HistoryBadge({ profile }) {
+  const fases = profile.fases || [];
+  if (fases.length > 1) {
+    const previa = fases[fases.length - 2];
+    const actual = fases[fases.length - 1];
+    const meta = GROUP_META[previa.ruta] || {};
+    const desde = actual.desde ? ` desde el ${actual.desde.slice(8, 10)}/${actual.desde.slice(5, 7)}` : '';
+    return (
+      <span title={actual.motivo || `${previa.ruta} → ${actual.ruta}${desde}`} style={{
+        fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+        background: `${meta.solid || '#64748b'}22`, color: meta.solid || '#64748b', whiteSpace: 'nowrap',
+      }}>{meta.icon || '↪'} {previa.ruta} → {actual.ruta}</span>
+    );
+  }
+
   const c = profile.cambioNivel || '';
   let bg, color, icon, text;
   if (/Ascendió/i.test(c))      { bg = '#7c3aed22'; color = '#a78bfa'; icon = '🔼'; text = 'Subió a Senior'; }
@@ -161,8 +179,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
   const [selectedProfile, setSelectedProfile] = useState(null);
 
   const cfg = PROGRAMAS[programa];
-  const GROUPS = cfg.grupos;
-  const [activeTab, setActiveTab] = useState(GROUPS[0]);
+  // La pestaña elegida se guarda tal cual, pero la que se usa (`activeTab`, más
+  // abajo) se valida contra los grupos que de verdad tienen gente.
+  const [tabSeleccionada, setActiveTab] = useState(cfg.grupos[0]);
 
   // Los dos programas exponen las mismas formas (ver src/lib/asistencia.js), así
   // que aquí solo se elige de cuál se lee. Sin datos de Círculos se cae a HS.
@@ -207,8 +226,12 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         email: c.email || '',
         phone: c.phone || '',
         city: c.city || 'Desconocido',
-        ruta: cf.ruta_asignada || 'Sin asignar',
+        ruta: rutaActual(cf) || 'Sin asignar',
         isActive: cf.estado_activo !== false && enr.status !== 'inactive',
+        // El historial de grupos, para que el modal pueda cerrar la fase abierta
+        // y abrir la nueva sin perder la asistencia anterior (src/lib/rutas.js).
+        customFormData: cf,
+        fases: fasesDeMatricula(cf),
         rutaInicial: cf.ruta_inicial || null,
         cambioNivel: cf.cambio_nivel || null,
         historia: cf.historia || null,
@@ -225,6 +248,21 @@ export default function FormationPage({ enrollments = [], formationProgress, att
       };
     });
   }, [datos.enrollments, datos.attendanceByCandidate]);
+
+  // Las pestañas salen de los DATOS, no de una lista fija: un grupo se muestra
+  // solo si alguien lo tiene como ruta actual. Así, cuando Activación termine de
+  // migrarse a Junior la pestaña desaparece sola, y si alguien se quedara atrás
+  // sigue visible en vez de esconderse. El vocabulario completo se conserva en
+  // PROGRAMAS —da el orden— y en GROUP_META los colores del histórico.
+  const GROUPS = useMemo(() => {
+    const conGente = new Set(profiles.map(p => p.ruta));
+    const vivos = cfg.grupos.filter(g => conGente.has(g));
+    return vivos.length ? vivos : cfg.grupos;
+  }, [profiles, cfg.grupos]);
+
+  // Si la pestaña elegida se quedó sin nadie, se cae a la primera con gente en
+  // vez de pintar una tabla vacía.
+  const activeTab = GROUPS.includes(tabSeleccionada) ? tabSeleccionada : GROUPS[0];
 
   // Stats globales por grupo
   const groupStats = useMemo(() => {

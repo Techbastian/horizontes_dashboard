@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
+import { fasesDeMatricula } from '../lib/rutas';
 import { PROGRAMA_CIRCULOS } from '../lib/eventos';
 
 // Círculos de Conocimiento vive en su propia cohorte, fijada por slug (nunca por
@@ -323,7 +324,7 @@ export function useCirculosData() {
   const candidatosAsistencia = useMemo(
     () => enrollments
       .filter(e => e.custom_form_data?.elegido !== false && e.candidate?.id)
-      .map(e => ({ candidate_id: e.candidate.id, grupo: e.custom_form_data?.ruta_asignada })),
+      .map(e => ({ candidate_id: e.candidate.id, fases: fasesDeMatricula(e.custom_form_data) })),
     [enrollments]
   );
 

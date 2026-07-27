@@ -18,6 +18,7 @@
 // (codigo NULL). Borra los 2 eventos de prueba históricos por id (solo --commit).
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -25,8 +26,6 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMMIT = process.argv.includes('--commit');
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/V9_CronogramaFormación_H_S.xlsx');
 const COHORT_ID = '3e8e4b55-b201-4a4e-90ae-ca5dab1c50e0'; // Cohorte 1 - 2026
 
@@ -43,7 +42,8 @@ const ACTIVACION_HORA_INICIO = '08:00';
 const ACTIVACION_HORA_FIN = '10:00';
 const ACTIVACION_FECHAS = ['2026-07-08', '2026-07-15', '2026-07-16', '2026-07-21', '2026-07-22'];
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
 // ── Utilidades ──────────────────────────────────────────────────────────────
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();

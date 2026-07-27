@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { GRUPO_CLASS } from '../lib/eventos';
+import { cambiarDeRuta, fasesDeMatricula } from '../lib/rutas';
 
 function progressColor(pct) {
   if (pct >= 75) return '#10b981';
@@ -18,7 +20,11 @@ function ProgressBar({ pct }) {
   );
 }
 
-const RUTAS = ['Senior', 'Junior', 'Activación'];
+// Destinos a los que se puede mover a alguien. Activación NO está: fue una
+// estrategia de arranque, no un grupo permanente, y sus participantes siguen el
+// cronograma Junior (ver scripts/reclasificar_activacion_junior.mjs). Sigue
+// existiendo como FASE en el historial de quien pasó por ahí.
+const RUTAS = ['Senior', 'Junior'];
 
 // Las mismas seis categorías que clasifica scripts/upload_retiros.mjs. RetirosPage
 // agrupa por este campo: inventar una categoría nueva aquí la dejaría fuera de los
@@ -34,9 +40,52 @@ const CATEGORIAS_RETIRO = [
 
 const hoyBogota = () => new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
 
-// Semáforo de asistencia por actividad
+// dd/mm a partir de 'YYYY-MM-DD'. Se corta la cadena, no se construye un Date:
+// `new Date('2026-07-23')` es medianoche UTC y en Colombia cae el día 22.
+const diaMes = (ymd) => (ymd ? `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}` : null);
+
+// Semáforo de asistencia por actividad, segmentado por FASE cuando la persona
+// pasó por más de un grupo (ver src/lib/rutas.js): sus sesiones de Activación no
+// son las mismas que las de Junior, y mezclarlas sin etiqueta no se entiende.
+// Con una sola fase se ve exactamente igual que antes.
 function AttendanceDots({ items, labelPrefix }) {
   if (!items || !items.length) return null;
+
+  // Los items ya vienen en orden cronológico y por fase: basta con cortar cada
+  // vez que cambia el grupo.
+  const tramos = [];
+  for (const it of items) {
+    const ultimo = tramos[tramos.length - 1];
+    if (ultimo && ultimo.grupo === it.grupo) ultimo.items.push(it);
+    else tramos.push({ grupo: it.grupo, items: [it] });
+  }
+
+  if (tramos.length === 1) return <Dots items={items} labelPrefix={labelPrefix} />;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {tramos.map((t, i) => {
+        const fechas = t.items.map((x) => x.fecha).filter(Boolean);
+        const rango = fechas.length
+          ? `${diaMes(fechas[0])}${fechas.length > 1 ? ` – ${diaMes(fechas[fechas.length - 1])}` : ''}`
+          : null;
+        return (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className={`events-badge events-badge-grupo ${GRUPO_CLASS[t.grupo] || 'grp-compartido'}`}>
+                {t.grupo}
+              </span>
+              {rango && <span style={{ fontSize: 11, color: '#64748b' }}>{rango}</span>}
+            </div>
+            <Dots items={t.items} labelPrefix={labelPrefix} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Dots({ items, labelPrefix }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
       {items.map((it, i) => {
@@ -67,7 +116,12 @@ function AttendanceDots({ items, labelPrefix }) {
 }
 
 export default function ParticipantDetailModal({ profile, courseProgress, attendance, onClose, onSave }) {
-  const [ruta, setRuta] = useState(RUTAS.includes(profile.ruta) ? profile.ruta : 'Junior');
+  // Se arranca SIEMPRE en la ruta actual de la persona, y si esa ruta ya no es un
+  // destino ofrecido (Activación, o "Sin asignar") se agrega al selector. Forzar
+  // otra de entrada activaría el botón de guardar sin que nadie tocara nada, y
+  // registraría un cambio de grupo que nadie pidió.
+  const [ruta, setRuta] = useState(profile.ruta);
+  const rutasDisponibles = RUTAS.includes(profile.ruta) ? RUTAS : [profile.ruta, ...RUTAS];
   const [isActive, setIsActive] = useState(profile.isActive);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -79,6 +133,17 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
   );
   const [motivo, setMotivo] = useState(profile.retiro?.motivo || '');
   const [fechaRetiro, setFechaRetiro] = useState(profile.retiro?.fecha || hoyBogota());
+
+  // Cambio de grupo. La fecha de corte es DESDE CUÁNDO cuenta el grupo nuevo:
+  // las actividades del grupo anterior siguen contando hasta el día previo, y
+  // las del nuevo anteriores a esa fecha no se le exigen (src/lib/rutas.js).
+  const [fechaCambio, setFechaCambio] = useState(hoyBogota());
+  const [motivoCambio, setMotivoCambio] = useState('');
+  const cambiaRuta = ruta !== profile.ruta;
+
+  // Grupos por los que ha pasado. FormationPage ya las trae calculadas; se
+  // derivan aquí como respaldo si el perfil llega sin ellas.
+  const fases = profile.fases || fasesDeMatricula(profile.customFormData);
 
   const canSave = !!onSave;
   const seVaAInactivar = !isActive;
@@ -102,6 +167,19 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
     setError(null);
     try {
       const custom = { ruta_asignada: ruta, estado_activo: isActive };
+
+      // Mover a alguien de grupo NO es solo pisar `ruta_asignada`: hay que cerrar
+      // su fase anterior y abrir la nueva. Si no, la asistencia se busca contra
+      // el grupo nuevo y desaparece todo lo que hizo en el anterior, porque las
+      // filas de session_attendance guardan el grupo del momento.
+      if (cambiaRuta) {
+        const cambio = cambiarDeRuta(profile.customFormData || { ruta_asignada: profile.ruta }, {
+          ruta,
+          desde: fechaCambio || hoyBogota(),
+          motivo: motivoCambio.trim() || null,
+        });
+        if (cambio) Object.assign(custom, cambio);
+      }
 
       if (seVaAInactivar) {
         custom.retiro = {
@@ -189,12 +267,29 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
           </div>
 
           {/* Historial / transición */}
-          {(profile.historia || profile.cambioNivel || profile.rutaInicial) && (
+          {(profile.historia || profile.cambioNivel || profile.rutaInicial || fases.length > 1) && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
                 Historial en el programa
               </div>
               <div style={{ background: '#ffffff', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* Línea de tiempo de grupos. Solo aparece si pasó por más de uno:
+                    con una sola fase no cuenta nada que no diga ya "Ruta actual". */}
+                {fases.length > 1 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 }}>
+                    {fases.map((f, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span className={`events-badge events-badge-grupo ${GRUPO_CLASS[f.ruta] || 'grp-compartido'}`}>
+                          {f.ruta}
+                        </span>
+                        <span style={{ fontSize: 12, color: '#64748b' }}>
+                          {f.desde || 'desde el inicio'} → {f.hasta || 'hoy'}
+                        </span>
+                        {f.motivo && <span style={{ fontSize: 12, color: '#475569' }}>· {f.motivo}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   {profile.rutaInicial && (
                     <>
@@ -384,7 +479,7 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                     outline: 'none', cursor: 'pointer',
                   }}
                 >
-                  {RUTAS.map(r => <option key={r} value={r}>{r}</option>)}
+                  {rutasDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
 
@@ -414,6 +509,55 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                 </div>
               </div>
             </div>
+
+            {/* Cambio de grupo: se pide desde cuándo cuenta, porque esa fecha es la
+                que separa su asistencia anterior de la nueva. */}
+            {cambiaRuta && (
+              <div style={{
+                marginTop: 16, padding: '16px 18px', borderRadius: 10,
+                background: '#ffffff', border: '1px solid #e2e8f0',
+                borderLeft: '3px solid #7c3aed',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginBottom: 4 }}>
+                  {profile.ruta} → {ruta}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>
+                  Su asistencia en {profile.ruta} se conserva y se sigue mostrando aparte.
+                  Desde la fecha de corte se le empiezan a contar las actividades de {ruta};
+                  las anteriores de ese grupo no se le exigen.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Cuenta desde</label>
+                    <input
+                      type="date"
+                      value={fechaCambio}
+                      onChange={e => setFechaCambio(e.target.value)}
+                      style={{
+                        width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                        borderRadius: 8, padding: '8px 10px', color: '#0f172a', fontSize: 14,
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Motivo del cambio</label>
+                    <input
+                      type="text"
+                      value={motivoCambio}
+                      onChange={e => setMotivoCambio(e.target.value)}
+                      placeholder="Por qué se mueve de grupo"
+                      style={{
+                        width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                        borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 13.5,
+                        outline: 'none', fontFamily: 'inherit',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Motivo del retiro: solo al inactivar. Alimenta la página de Retiros. */}
             {seVaAInactivar && (

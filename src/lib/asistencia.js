@@ -156,13 +156,43 @@ export function pctOcurridas(items) {
 
 const bucketDe = (tipo) => (tipo === 'sesion' ? 'sesiones' : tipo === 'cafe' ? 'cafes' : 'entregables');
 
+// FASES: los grupos por los que ha pasado una persona, en orden cronológico.
+// Las filas de session_attendance son inmutables y conservan el grupo donde
+// ocurrió la actividad, así que mover a alguien de grupo NO puede borrar su
+// historia: se recorre cada fase contra las actividades de SU grupo.
+// Quien nunca cambió de grupo tiene una sola fase abierta = comportamiento
+// idéntico al de antes de que existieran las fases.
+function normalizarFases(c) {
+  const fases = (Array.isArray(c.fases) ? c.fases : []).filter((f) => f && f.ruta);
+  if (!fases.length) return c.grupo ? [{ ruta: c.grupo, desde: null, hasta: null }] : [];
+  return fases
+    .map((f) => ({ ruta: f.ruta, desde: f.desde || null, hasta: f.hasta || null }))
+    .sort((a, b) => String(a.desde || '').localeCompare(String(b.desde || '')));
+}
+
+// ¿Esta actividad del grupo de la fase le corresponde a la persona en esa fase?
+// El corte por `desde` es lo que evita que a quien entró a Junior el 23/07 le
+// aparezcan como huecos las sesiones Junior de mayo y junio.
+function perteneceAFase(a, f, fila) {
+  // Un registro real manda sobre la ventana: si a la persona se le midió esa
+  // actividad, cuenta aunque las fechas de la fase digan otra cosa. Así una
+  // fecha de corte mal puesta nunca puede esconder datos reales.
+  if (fila && fila.asistio !== null) return true;
+  // Los entregables no tienen fecha: solo se le esperan en su fase actual.
+  if (!a.fecha) return f.hasta == null;
+  if (f.desde && a.fecha < f.desde) return false;
+  if (f.hasta && a.fecha > f.hasta) return false;
+  return true;
+}
+
 /**
  * Punto de entrada único.
  * @param filas      filas de session_attendance de la cohorte
  * @param eventos    eventos del calendario de la cohorte
  * @param programa   slug del programa (define los grupos)
- * @param candidatos [{ candidate_id, grupo }] — de las matrículas; necesarios para
- *                   que una actividad sin filas aparezca igual en la fila de cada persona
+ * @param candidatos [{ candidate_id, grupo }] o [{ candidate_id, fases: [{ruta, desde, hasta}] }]
+ *                   — de las matrículas; necesarios para que una actividad sin filas
+ *                   aparezca igual en la fila de cada persona. `fases` manda sobre `grupo`.
  */
 export function calcularAsistencia({ filas = [], eventos = [], programa, candidatos = [] }) {
   const esperadas = actividadesDelCalendario(eventos, programa);
@@ -183,29 +213,79 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
 
   // ── Por candidato ─────────────────────────────────────────────────────────
   const porCandidato = {};
-  const grupoDe = new Map(candidatos.map((c) => [c.candidate_id, c.grupo]));
+  const fasesDe = new Map(candidatos.map((c) => [c.candidate_id, normalizarFases(c)]));
   // Quien tenga filas pero no esté en la lista de matrículas igual se incluye.
-  for (const r of filas) if (!grupoDe.has(r.candidate_id)) grupoDe.set(r.candidate_id, r.grupo);
+  for (const r of filas) {
+    if (!fasesDe.has(r.candidate_id)) fasesDe.set(r.candidate_id, [{ ruta: r.grupo, desde: null, hasta: null }]);
+  }
 
-  for (const [candidateId, grupo] of grupoDe) {
-    const actividades = porGrupoActividades.get(grupo) || [];
-    const g = { grupo, sesiones: [], cafes: [], entregables: [] };
+  for (const [candidateId, fases] of fasesDe) {
+    // El grupo "actual" es la última fase; con una sola fase es el de siempre.
+    const g = {
+      grupo: fases.length ? fases[fases.length - 1].ruta : null,
+      fases: [],
+      sesiones: [], cafes: [], entregables: [],
+    };
+    // 1) Qué actividades reclama cada fase. Dos fases pueden compartir ruta (ida
+    //    y vuelta Junior→Senior→Junior): cada actividad se cuenta una sola vez,
+    //    en la primera fase que la reclama.
+    const vistas = new Set();
+    const candidatas = fases.map((f) => {
+      const lista = [];
+      for (const a of porGrupoActividades.get(f.ruta) || []) {
+        if (vistas.has(a.k)) continue;
+        const fila = registro.get(`${a.k}|${candidateId}`);
+        if (!perteneceAFase(a, f, fila)) continue;
+        vistas.add(a.k);
+        lista.push({ a, fila });
+      }
+      return lista;
+    });
 
-    for (const a of actividades) {
-      const fila = registro.get(`${a.k}|${candidateId}`);
-      g[bucketDe(a.tipo)].push({
-        candidate_id: candidateId,
-        grupo: a.grupo,
-        tipo: a.tipo,
-        actividad: a.actividad,
-        fecha: a.fecha,
-        orden: a.orden,
-        // Sin fila = nunca se le registró nada a esta persona en esa actividad.
-        asistio: fila ? fila.asistio : null,
-        observacion: fila ? fila.observacion : null,
-        occurred: ocurridas.has(a.k),
-      });
+    // 2) Las actividades sin fecha (los entregables) son de la COHORTE, no del
+    //    grupo: "Entregable 1" está replicado en Junior, Senior y Activación.
+    //    Quien pasó por dos grupos lo vería dos veces —"no entregó" en la fase
+    //    vieja y "pendiente" en la nueva—, así que se deja uno solo: el de la
+    //    última fase donde se le midió, o el de su fase actual si nunca se midió.
+    //    Las actividades con fecha no se deduplican: dos grupos pueden tener
+    //    sesiones distintas el mismo día y son actividades diferentes.
+    const unico = new Map();
+    for (const lista of candidatas) {
+      for (const { a, fila } of lista) {
+        if (a.fecha) continue;
+        const nombre = `${a.tipo}|${a.actividad}`;
+        const medida = !!fila && fila.asistio !== null;
+        const previa = unico.get(nombre);
+        if (!previa || medida || !previa.medida) unico.set(nombre, { clave: a.k, medida });
+      }
     }
+
+    candidatas.forEach((lista, i) => {
+      const f = fases[i];
+      const items = [];
+      for (const { a, fila } of lista) {
+        if (!a.fecha && unico.get(`${a.tipo}|${a.actividad}`)?.clave !== a.k) continue;
+        const item = {
+          candidate_id: candidateId,
+          grupo: a.grupo,
+          tipo: a.tipo,
+          actividad: a.actividad,
+          fecha: a.fecha,
+          orden: a.orden,
+          // Sin fila = nunca se le registró nada a esta persona en esa actividad.
+          asistio: fila ? fila.asistio : null,
+          observacion: fila ? fila.observacion : null,
+          occurred: ocurridas.has(a.k),
+        };
+        items.push(item);
+        // Las listas planas son la UNIÓN de las fases. No se reordenan: cada
+        // fase ya viene ordenada y las fases van en orden cronológico, así que
+        // concatenar da el orden correcto. Reordenar por fecha movería los
+        // entregables (sin fecha) al principio.
+        g[bucketDe(a.tipo)].push(item);
+      }
+      g.fases.push({ ...f, items });
+    });
 
     g.pctSesiones = pctOcurridas(g.sesiones);
     g.pctCafes = pctOcurridas(g.cafes);
@@ -224,6 +304,10 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
   }
 
   // ── Agregado por grupo, para los gráficos de barras ───────────────────────
+  // Cada barra cuenta lo ocurrido EN ese grupo: quien pasó por Activación sigue
+  // pesando en las barras de Activación aunque hoy sea Junior. Sale gratis
+  // porque solo se cuentan filas registradas, y cada fila lleva su grupo real.
+  const rutasDe = new Map([...fasesDe].map(([id, fases]) => [id, new Set(fases.map((f) => f.ruta))]));
   const porGrupo = {};
   for (const [grupo, actividades] of porGrupoActividades) {
     const construir = (tipo) =>
@@ -232,8 +316,8 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
         .map((a) => {
           let asistieron = 0;
           let total = 0;
-          for (const candidateId of grupoDe.keys()) {
-            if (grupoDe.get(candidateId) !== grupo) continue;
+          for (const candidateId of rutasDe.keys()) {
+            if (!rutasDe.get(candidateId).has(grupo)) continue;
             const fila = registro.get(`${a.k}|${candidateId}`);
             // `asistio` null (o sin fila) = no registrado: no suma a ningún lado.
             if (fila && fila.asistio !== null) {

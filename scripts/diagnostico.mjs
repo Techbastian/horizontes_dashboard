@@ -10,20 +10,12 @@
 //   node scripts/diagnostico.mjs rutas        → distribución de rutas/grupos
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { credencialesLectura } from './_env.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Lee credenciales del .env de la raíz del proyecto (clave anónima, solo lectura)
-const env = readFileSync(resolve(__dirname, '../.env'), 'utf-8').split('\n').reduce((acc, line) => {
-  const [k, v] = line.split('=');
-  if (k && v) acc[k.trim()] = v.trim();
-  return acc;
-}, {});
-
-const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+// Clave anónima a propósito: estos diagnósticos solo leen y así no pueden
+// escribir nada por accidente aunque alguien agregue una consulta de más.
+const { url, key } = credencialesLectura();
+const supabase = createClient(url, key);
 
 // Los diagnósticos apuntan a Horizontes Senior. Se fija por slug porque la base
 // aloja varios programas activos (Círculos de Conocimiento) y `status='active'`

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
+import { fasesDeMatricula } from '../lib/rutas';
 import { PROGRAMA_HS } from '../lib/eventos';
 
 // Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
@@ -280,10 +281,13 @@ export function useApplicationsData() {
   // El cálculo vive en src/lib/asistencia.js porque lo comparten los dos programas.
   // Los candidatos vienen de las matrículas: sin ellos, una actividad del calendario
   // sin filas no sabría a quién corresponde y no aparecería en la tabla.
+  // Van con sus FASES (los grupos por los que pasaron, ver src/lib/rutas.js), no con
+  // un solo grupo: si no, a quien cambió de ruta se le perdería la asistencia del
+  // grupo anterior, porque las filas guardan el grupo del momento.
   const candidatosAsistencia = useMemo(
     () => enrollments
       .filter(e => e.custom_form_data?.elegido !== false && e.candidate?.id)
-      .map(e => ({ candidate_id: e.candidate.id, grupo: e.custom_form_data?.ruta_asignada })),
+      .map(e => ({ candidate_id: e.candidate.id, fases: fasesDeMatricula(e.custom_form_data) })),
     [enrollments]
   );
 

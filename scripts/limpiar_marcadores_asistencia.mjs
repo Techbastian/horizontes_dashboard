@@ -19,11 +19,10 @@
 // esto es para los datos que quedaron cargados de antes.
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 
 const COMMIT = process.argv.includes('--commit');
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 
 const COHORTES = [
   ['Horizontes Senior', '3e8e4b55-b201-4a4e-90ae-ca5dab1c50e0'],
@@ -44,7 +43,8 @@ const SIN_CARGAR_CONFIRMADAS = {
   ],
 };
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
 // Comparación por cadena 'YYYY-MM-DD' contra hoy en Bogotá (UTC-5 fijo). Comparar
 // objetos Date daba un día de error: `new Date('2026-07-23')` es medianoche UTC,

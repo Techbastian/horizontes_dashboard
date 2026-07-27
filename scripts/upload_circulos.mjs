@@ -21,6 +21,7 @@
 // varias veces sin duplicar.
 // ============================================================================
 import { createClient } from '@supabase/supabase-js';
+import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -28,15 +29,14 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMMIT = process.argv.includes('--commit');
 
-const SUPABASE_URL = 'https://rbhgyrxblkzxwfrrcavh.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiaGd5cnhibGt6eHdmcnJjYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjExNjkyMSwiZXhwIjoyMDkxNjkyOTIxfQ.TMsipnArxDstVFPcARN4-knhQy03mo4Gt1n1ylSpRVg';
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Circulos de conocimiento.xls');
 
 const COHORT_ID = '386dcf50-e269-4b5b-b248-aaa754dbd0aa'; // Círculos de Conocimiento I
 const ANIO_ACTUAL = 2026;
 const RUTA = 'Círculos'; // valor de custom_form_data.ruta_asignada (lo usa el modal de asistencia)
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const { url, key } = credencialesServicio();
+const supabase = createClient(url, key);
 
 // ── Utilidades de normalización ─────────────────────────────────────────────
 const clean = (v) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim());
