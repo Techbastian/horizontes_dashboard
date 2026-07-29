@@ -10,7 +10,10 @@
       "Bash(rm -f ./_tmp_inspect.mjs)",
       "Bash(npm run *)",
       "Bash(node scripts/reclasificar_activacion_junior.mjs)",
-      "Bash(node _post.mjs)"
+      "Bash(node _post.mjs)",
+      "Bash(taskkill //F //FI \"WINDOWTITLE eq *vite*\")",
+      "Bash(pkill -f \"vite\")",
+      "PowerShell(npm run *)"
     ]
   }
 }
