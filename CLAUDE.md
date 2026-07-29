@@ -19,8 +19,8 @@ npm run preview    # previsualiza el build
 
 # ETL con DRY RUN por defecto (upload_asistencia, upload_asistencia_circulos,
 #                              upload_circulos, upload_eventos,
-#                              upload_eventos_circulos, upload_retiros,
-#                              limpiar_marcadores_asistencia)
+#                              upload_eventos_circulos, upload_registro_circulos,
+#                              upload_retiros, limpiar_marcadores_asistencia)
 node scripts/upload_asistencia.mjs            # dry run (no escribe)
 node scripts/upload_asistencia.mjs --commit   # escribe
 node scripts/diagnostico.mjs [enrollments|ids|join|rutas]   # inspección read-only; sin arg corre todo
