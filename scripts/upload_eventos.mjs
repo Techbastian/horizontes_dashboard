@@ -42,6 +42,21 @@ const ACTIVACION_HORA_INICIO = '08:00';
 const ACTIVACION_HORA_FIN = '10:00';
 const ACTIVACION_FECHAS = ['2026-07-08', '2026-07-15', '2026-07-16', '2026-07-21', '2026-07-22'];
 
+// Mentorías de seguimiento. El cronograma V9 las lista en el resumen de horas
+// (M-J01/M-J02 en Junior, M-S01/M-S02 en Senior · 3 h en total) pero SIN fecha, y
+// además con la nota "Mentorías post-programa eliminadas": el parser no puede
+// sacarlas de ahí. Van aquí con las fechas que confirma el usuario, igual que las
+// nivelaciones de Activación.
+//
+// Llevan tipo ['mentoria'] A SECAS, sin 'sesion': son acompañamiento y NO deben
+// entrar en el % de asistencia del programa (decisión del usuario, 2026-07-29).
+// Con eso `attendanceTipo` devuelve null, el dashboard no les crea actividad
+// esperada y no aparece el botón de tomar asistencia. Si alguna sí debiera
+// contar, se le agrega 'sesion' y el resto funciona solo.
+const MENTORIAS = [
+  { codigo: 'M-J01', grupo: 'Junior', fecha: '2026-07-29', inicio: '16:00', fin: '17:30' },
+];
+
 const { url, key } = credencialesServicio();
 const supabase = createClient(url, key);
 
@@ -176,6 +191,22 @@ function buildEventos() {
       fecha_hora_fin: bogotaIso(fecha, ACTIVACION_HORA_FIN.split(':').map(Number)),
     });
   });
+
+  // Mentorías de seguimiento (fechas confirmadas por el usuario, no van en el Excel).
+  for (const m of MENTORIAS) {
+    const orden = MENTORIAS.filter((x) => x.grupo === m.grupo).indexOf(m) + 1;
+    byCodigo.set(m.codigo, {
+      cohort_id: COHORT_ID,
+      grupo: m.grupo,
+      codigo: m.codigo,
+      tipo: ['mentoria'],
+      nombre: `Mentoría de seguimiento ${orden} — ${m.grupo}`,
+      descripcion: 'Acompañamiento de seguimiento (Fase 4). No cuenta para el porcentaje de asistencia del programa.',
+      evidencia_url: null,
+      fecha_hora_inicio: bogotaIso(m.fecha, m.inicio.split(':').map(Number)),
+      fecha_hora_fin: bogotaIso(m.fecha, m.fin.split(':').map(Number)),
+    });
+  }
 
   return [...byCodigo.values()].sort(
     (a, b) => new Date(a.fecha_hora_inicio) - new Date(b.fecha_hora_inicio)

@@ -38,10 +38,24 @@ const GRUPO = 'Círculos'; // grupo único: los 263 no están subdivididos
 //
 // `actividad` debe coincidir con el `codigo` del evento para que la app edite la
 // misma fila al tomar asistencia desde el calendario, en vez de crear una nueva.
-const COLUMNAS_FORMULARIO = {
+// Los encabezados los pone quien arma el formulario en Google Forms y CAMBIAN de
+// una sesión a otra (la del 29/07 no reutilizó el formulario del 21/07: "Correo
+// electrónico" pasó a "Dirección de correo electrónico", etc.). Por eso cada
+// sesión declara los suyos y nunca se leen por posición.
+const COLUMNAS_SESION_INICIAL = {
   email: 'Correo electrónico',
   nombre: 'Nombre(s) completo(s) y apellido(s)',
   doc: 'Número de cédula de ciudadanía (o documento de identidad, sin puntos ni comas)',
+};
+
+// A partir de las mentorías el formulario pregunta además qué necesita cada
+// quien; esa respuesta va a session_attendance.observacion, que es donde el
+// dashboard busca las notas por actividad (perfil, informe de retiros, PDF).
+const COLUMNAS_MENTORIA = {
+  email: 'Dirección de correo electrónico',
+  nombre: 'Nombre completo y apellidos',
+  doc: 'Número de documento de identidad',
+  observacion: '¿Hay algo urgente que tu mentor deba saber hoy para apoyarte mejor?',
 };
 
 const SESIONES = [
@@ -49,11 +63,16 @@ const SESIONES = [
     actividad: 'C-S01',
     fecha: '2026-07-21',
     archivo: 'Asistencia Sesión Inicial  21-07.xlsx',
-    columnas: COLUMNAS_FORMULARIO,
+    columnas: COLUMNAS_SESION_INICIAL,
   },
-  // Sin `archivo` = aún no hay formulario. Solo se crean las filas que falten,
-  // nunca se pisan las que ya tengan asistencia registrada desde la app.
-  { actividad: 'C-S02', fecha: '2026-07-29' },
+  {
+    actividad: 'C-S02',
+    fecha: '2026-07-29',
+    archivo: 'Asistencia sesion 29-07-2026.xlsx',
+    columnas: COLUMNAS_MENTORIA,
+  },
+  // Sin `archivo` = aún no hay formulario, y no se escribe nada: la sesión ya
+  // está en el calendario, que es lo que la hace existir para el dashboard.
   { actividad: 'C-S03', fecha: '2026-08-06' },
   { actividad: 'C-S04', fecha: '2026-08-11' },
   { actividad: 'C-S05', fecha: '2026-08-18' },
@@ -80,6 +99,10 @@ function leerFormulario(sesion) {
     email: mail(f[sesion.columnas.email]),
     nombre: String(f[sesion.columnas.nombre] ?? '').trim(),
     doc: doc(f[sesion.columnas.doc]),
+    // Opcional: no todos los formularios la preguntan.
+    observacion: sesion.columnas.observacion
+      ? String(f[sesion.columnas.observacion] ?? '').trim()
+      : '',
   }));
 }
 
@@ -129,11 +152,18 @@ async function main() {
   // sesiones que aquí solo llevan marcador de posición.
   const { data: yaRegistrado, error: yaErr } = await supabase
     .from('session_attendance')
-    .select('candidate_id, actividad, asistio')
+    .select('candidate_id, actividad, asistio, observacion')
     .eq('cohort_id', COHORT_ID)
     .eq('grupo', GRUPO);
   if (yaErr) throw yaErr;
   const existentes = new Set((yaRegistrado || []).map((r) => `${r.actividad}|${r.candidate_id}`));
+  // Observaciones ya guardadas: si el formulario no trae una, se conserva la que
+  // haya (puede venir de la app), en vez de pisarla con null al re-correr.
+  const obsPrevia = new Map(
+    (yaRegistrado || [])
+      .filter((r) => String(r.observacion || '').trim())
+      .map((r) => [`${r.actividad}|${r.candidate_id}`, r.observacion])
+  );
 
   const filasAEscribir = [];
   const sinResolver = [];
@@ -170,15 +200,25 @@ async function main() {
         continue;
       }
       // Varias filas de la misma persona (envió el formulario dos veces) colapsan
-      // en una sola: el primer match manda.
-      if (!presentes.has(r.e.candidate_id)) presentes.set(r.e.candidate_id, r.via);
+      // en una sola: el primer match manda. La observación es la excepción — si
+      // el primer envío vino vacío y el segundo trae texto, se queda el texto.
+      const previo = presentes.get(r.e.candidate_id);
+      if (!previo) {
+        presentes.set(r.e.candidate_id, { via: r.via, observacion: a.observacion });
+      } else if (!previo.observacion && a.observacion) {
+        previo.observacion = a.observacion;
+      }
     }
 
+    const conObservacion = [...presentes.values()].filter((p) => p.observacion).length;
     console.log(`     filas en el formulario : ${asistentes.length}`);
     console.log(`     asistentes únicos      : ${presentes.size}`);
     console.log(`     ausentes (marcados no) : ${enrs.length - presentes.size}`);
+    if (sesion.columnas.observacion) {
+      console.log(`     con observación        : ${conObservacion}`);
+    }
     const via = {};
-    for (const v of presentes.values()) via[v] = (via[v] || 0) + 1;
+    for (const v of presentes.values()) via[v.via] = (via[v.via] || 0) + 1;
     console.log(`     resueltos por          : ${Object.entries(via).map(([k, n]) => `${k} ${n}`).join(' · ')}`);
 
     for (const e of enrs) {
@@ -195,7 +235,11 @@ async function main() {
         // que las sesiones futuras se ordenaran antes que esta.
         orden: null,
         asistio: presentes.has(e.candidate_id),
-        observacion: null,
+        // Lo que respondió en el formulario; si no respondió, lo que ya hubiera.
+        observacion:
+          presentes.get(e.candidate_id)?.observacion ||
+          obsPrevia.get(`${sesion.actividad}|${e.candidate_id}`) ||
+          null,
         evento_id: evento?.id ?? null,
       });
     }
