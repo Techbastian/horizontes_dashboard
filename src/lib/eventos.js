@@ -41,6 +41,10 @@ export const TIPO_OPCIONES = [
   { value: 'sesion', label: 'Sesión' },
   { value: 'cafe', label: 'Café' },
   { value: 'nivelacion', label: 'Nivelación' },
+  // Acompañamiento en grupo. Va junto a 'sesion' (no en su lugar): las mentorías
+  // de Círculos son las sesiones 2 a 5 y llevan asistencia como cualquier sesión;
+  // este tipo solo las identifica en el calendario.
+  { value: 'mentoria', label: 'Mentoría' },
   { value: 'evaluacion', label: 'Evaluación' },
   { value: 'proyecto', label: 'Proyecto' },
   { value: 'evento', label: 'Evento' },

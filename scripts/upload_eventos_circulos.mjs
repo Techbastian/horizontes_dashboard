@@ -47,10 +47,14 @@ const CALENDARIO = [
     fecha: '2026-07-21',
     tipo: ['sesion', 'evento'],
   },
-  { codigo: 'C-S02', nombre: 'Círculos — Sesión 2', fecha: '2026-07-29', tipo: ['sesion'] },
-  { codigo: 'C-S03', nombre: 'Círculos — Sesión 3', fecha: '2026-08-06', tipo: ['sesion'] },
-  { codigo: 'C-S04', nombre: 'Círculos — Sesión 4', fecha: '2026-08-11', tipo: ['sesion'] },
-  { codigo: 'C-S05', nombre: 'Círculos — Sesión 5', fecha: '2026-08-18', tipo: ['sesion'] },
+  // Las cuatro sesiones que siguen a la apertura son de MENTORÍA (confirmado por
+  // el usuario, 2026-07-29). Llevan 'sesion' además de 'mentoria' a propósito:
+  // la asistencia se toma igual que en cualquier sesión —attendanceTipo lee
+  // 'sesion'— y 'mentoria' solo sirve para reconocerlas en el calendario.
+  { codigo: 'C-S02', nombre: 'Círculos — Sesión 2 (mentoría)', fecha: '2026-07-29', tipo: ['sesion', 'mentoria'] },
+  { codigo: 'C-S03', nombre: 'Círculos — Sesión 3 (mentoría)', fecha: '2026-08-06', tipo: ['sesion', 'mentoria'] },
+  { codigo: 'C-S04', nombre: 'Círculos — Sesión 4 (mentoría)', fecha: '2026-08-11', tipo: ['sesion', 'mentoria'] },
+  { codigo: 'C-S05', nombre: 'Círculos — Sesión 5 (mentoría)', fecha: '2026-08-18', tipo: ['sesion', 'mentoria'] },
 ];
 
 // Códigos de una numeración anterior (la apertura iba como 'C-AP', fuera de la
