@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
-import { fasesDeMatricula } from '../lib/rutas';
+import { fasesDeMatricula, rutaActual } from '../lib/rutas';
 import { PROGRAMA_HS } from '../lib/eventos';
+import { SIN_CLASIFICAR, contextoAsistencia, excusasDe } from '../lib/retiros';
 
 // Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
 // status='active': la base es compartida y ya hay más de un programa activo (Círculos
@@ -328,7 +329,14 @@ export function useApplicationsData() {
     };
   }, [circulosIds, applications]);
 
-  // Retiros y casos en riesgo (desde custom_form_data)
+  // Retención: TODA persona inactivada aparece aquí, tenga o no un motivo escrito.
+  //
+  // Antes solo entraban las que tenían el objeto `retiro` (13 de 28 al 2026-07-28):
+  // a quien el ETL inactivó desde la columna "Estado final = INACTIVO" de la
+  // matriz nunca se le creó ese objeto, así que desaparecía del tablero de
+  // retención — justo la gente sobre la que hay que actuar. Ahora sale con la
+  // categoría `SIN_CLASIFICAR` y su contexto de asistencia, para que se vea, se
+  // entienda por qué se fue y se pueda clasificar desde la propia página.
   const retiros = useMemo(() => {
     const casos = [], enRiesgo = [];
     const porCategoria = {}, porNivel = { Junior: 0, Senior: 0, 'Activación': 0 };
@@ -336,25 +344,57 @@ export function useApplicationsData() {
     enrollments.forEach(e => {
       const cf = e.custom_form_data || {};
       const c = e.candidate || {};
+      // Las matrículas nunca elegidas son heredadas: no son retiros del programa.
+      if (cf.elegido === false) return;
       const nombre = cf.nombre_completo || `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Desconocido';
       const doc = cf.cedula || c.document_number || 'S/N';
-      if (cf.retiro) {
-        const nivel = cf.retiro.nivel || cf.ruta_asignada || 'Junior';
-        casos.push({ id: e.id, candidate_id: c.id, nombre, doc, email: c.email || '', nivel, ...cf.retiro });
-        porCategoria[cf.retiro.categoria] = (porCategoria[cf.retiro.categoria] || 0) + 1;
+      const inactivo = cf.estado_activo === false || e.status === 'inactive';
+
+      if (inactivo || cf.retiro) {
+        const r = cf.retiro || {};
+        const nivel = r.nivel || rutaActual(cf) || 'Junior';
+        const categoria = r.categoria || SIN_CLASIFICAR;
+        casos.push({
+          id: e.id, candidate_id: c.id, nombre, doc, email: c.email || '', nivel,
+          ...r,
+          categoria,
+          // `sinClasificar` es lo que la UI usa para pedir que se complete. No se
+          // rellena el motivo con `motivo_cambio` (dice "Sin cambio de nivel" o
+          // "Bajó de Senior a Junior"): eso habla del nivel, no de por qué se fue,
+          // y presentarlo como motivo de retiro sería inventar un dato.
+          sinClasificar: !r.categoria,
+          // Sigue inactivo hoy. Un `retiro` archivado en alguien reactivado no
+          // debería llegar aquí, pero si llega se ve como lo que es.
+          inactivo,
+          asistencia: contextoAsistencia(attendanceByCandidate[c.id]),
+          excusas: excusasDe(attendanceByCandidate[c.id]),
+        });
+        porCategoria[categoria] = (porCategoria[categoria] || 0) + 1;
         porNivel[nivelKey(nivel)] = (porNivel[nivelKey(nivel)] || 0) + 1;
       }
+
       if (cf.en_riesgo) {
         enRiesgo.push({
           id: e.id, candidate_id: c.id, nombre, doc, email: c.email || '',
           situacion: cf.riesgo_situacion, canal: cf.riesgo_canal, fecha: cf.riesgo_fecha,
-          ruta: cf.ruta_asignada, yaRetirado: !!cf.retiro,
+          ruta: rutaActual(cf), yaRetirado: !!cf.retiro,
           activo: cf.estado_activo !== false && e.status !== 'inactive',
+          asistencia: contextoAsistencia(attendanceByCandidate[c.id]),
         });
       }
     });
-    return { casos, enRiesgo, porCategoria, porNivel, total: casos.length, totalRiesgo: enRiesgo.length };
-  }, [enrollments]);
+
+    // Los más recientes primero; los que no tienen fecha (sin clasificar) arriba,
+    // porque son los que hay que atender.
+    casos.sort((a, b) => String(b.fecha || '9999').localeCompare(String(a.fecha || '9999')));
+
+    return {
+      casos, enRiesgo, porCategoria, porNivel,
+      total: casos.length,
+      sinClasificar: casos.filter(c => c.sinClasificar).length,
+      totalRiesgo: enRiesgo.length,
+    };
+  }, [enrollments, attendanceByCandidate]);
 
   // Computed metrics
   const metrics = useMemo(() => {

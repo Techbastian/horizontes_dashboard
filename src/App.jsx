@@ -58,6 +58,10 @@ export default function App() {
                 cohort={cohort}
                 formationProgress={formationProgress}
                 continuidadCirculos={continuidadCirculos}
+                // Para el informe ejecutivo en PDF: la asistencia por grupo y
+                // los retiros ya están calculados en el hook, no se recalculan.
+                groupAttendance={groupAttendance}
+                retiros={retiros}
               />
             }
           />
@@ -89,7 +93,7 @@ export default function App() {
           />
           <Route
             path="/retiros"
-            element={<RetirosPage retiros={retiros} metrics={metrics} />}
+            element={<RetirosPage retiros={retiros} metrics={metrics} updateEnrollment={updateEnrollment} />}
           />
           <Route
             path="/eventos"

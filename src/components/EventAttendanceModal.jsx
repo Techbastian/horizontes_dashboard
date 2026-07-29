@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { isoToBogotaDate } from '../lib/bogotaTime';
 import { GRUPO_CLASS, attendanceTipo, gruposDeAsistencia, tipoLabel } from '../lib/eventos';
+import { rutaActual } from '../lib/rutas';
+import { yaPaso } from '../lib/asistencia';
 
 // Clave estable para el mapa de marcas.
 const keyOf = (grupo, candidateId) => `${grupo}:${candidateId}`;
@@ -44,7 +46,11 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
         for (const e of enrs || []) {
           const d = e.custom_form_data || {};
           if (d.elegido === false) continue;
-          const g = d.ruta_asignada;
+          // El grupo sale del historial de rutas, no de `ruta_asignada` a secas:
+          // es la misma fuente que usa /formacion, y así quien cambió de grupo
+          // aparece en el evento del grupo en el que está hoy aunque un ETL solo
+          // le haya escrito las fases.
+          const g = rutaActual(d);
           if (!porGrupo[g]) continue;
           porGrupo[g].push({ candidate_id: e.candidate_id, nombre: d.nombre_completo || '(sin nombre)' });
         }
@@ -230,6 +236,24 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
           )}
 
           {error && <div className="error-message" style={{ marginBottom: 12 }}>{error}</div>}
+
+          {/* Guardar una sesión que todavía no ocurre marca como ausente a todo
+              el que no esté chuleado —en Círculos son 263 personas de una vez—.
+              No se bloquea (puede haber una razón), pero se avisa: mientras la
+              fecha no llegue la actividad no entra en los porcentajes, y el día
+              que llegue lo haría con 0%. */}
+          {!yaPaso(fecha) && (
+            <div
+              style={{
+                marginBottom: 12, padding: '10px 14px', borderRadius: 'var(--radius-md)',
+                background: 'var(--accent-amber-dim)', borderLeft: '3px solid var(--accent-amber)',
+                fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.5,
+              }}
+            >
+              Esta actividad todavía no ocurre. Si guardas ahora, todos los que no queden marcados
+              se registran como <strong>ausentes</strong>.
+            </div>
+          )}
 
           {loading ? (
             <p style={{ color: 'var(--text-muted)' }}>Cargando participantes…</p>

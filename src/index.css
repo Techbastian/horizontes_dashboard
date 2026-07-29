@@ -238,18 +238,6 @@ body {
   flex-shrink: 0;
 }
 
-.nav-badge {
-  margin-left: auto;
-  font-size: 9px;
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  background: rgba(148, 163, 184, 0.1);
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
 .sidebar-footer {
   padding: 16px 12px;
   border-top: 1px solid var(--border-subtle);
@@ -591,11 +579,6 @@ body {
 .badge-sin-asignar {
   background: rgba(148, 163, 184, 0.1);
   color: var(--text-muted);
-}
-
-.badge-pending {
-  background: var(--accent-amber-dim);
-  color: var(--accent-amber);
 }
 
 .badge-rejected {
@@ -1337,33 +1320,6 @@ body {
   color: var(--accent-teal);
 }
 
-/* ===== TOGGLE ===== */
-.toggle-group {
-  display: flex;
-  gap: 2px;
-  background: rgba(148, 163, 184, 0.06);
-  border-radius: var(--radius-sm);
-  padding: 2px;
-}
-
-.toggle-btn {
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-family: inherit;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.toggle-btn.active {
-  background: var(--accent-violet);
-  color: white;
-}
-
 /* ===== RECHARTS OVERRIDES ===== */
 .recharts-text {
   fill: var(--text-muted) !important;
@@ -2044,6 +2000,223 @@ body {
   font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
+}
+
+/* ===== INFORMES (vista previa + impresión a PDF) =====
+   La vista previa y el papel comparten estos estilos a propósito: el nodo que
+   se ve en pantalla es exactamente el que se imprime. Ver InformeModal.jsx. */
+.informe-hoja {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 32px 36px 24px;
+  box-shadow: var(--shadow-card);
+  /* Sin esto el navegador descarta los fondos al imprimir y las barras
+     de asistencia salen en blanco. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.informe-encabezado {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--accent-teal);
+  margin-bottom: 22px;
+}
+
+.informe-titulo {
+  font-size: 21px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.informe-subtitulo {
+  font-size: 12.5px;
+  color: #475569;
+  margin-top: 3px;
+}
+
+.informe-marca {
+  text-align: right;
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.5;
+  max-width: 230px;
+}
+
+.informe-logo {
+  display: block;
+  height: 24px;
+  width: auto;
+  margin: 0 0 8px auto;
+}
+
+.informe-seccion {
+  margin-bottom: 22px;
+}
+
+.informe-seccion h2 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #0d9488;
+  margin-bottom: 10px;
+  /* Un título no debe quedar solo al final de una página. */
+  break-after: avoid;
+}
+
+.informe-nota {
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.55;
+  margin-bottom: 10px;
+}
+
+.informe-cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: var(--radius-md);
+  break-inside: avoid;
+}
+
+.informe-cifra {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.informe-cifra-label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.informe-cifra-detalle {
+  font-size: 11px;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.informe-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+}
+
+.informe-tabla th {
+  text-align: left;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1px solid #cbd5e1;
+  padding: 6px 8px;
+  background: #f8fafc;
+}
+
+.informe-tabla td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.informe-tabla tr {
+  break-inside: avoid;
+}
+
+.informe-barra-fila {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.informe-barra-pista {
+  flex: 1;
+  min-width: 60px;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.informe-barra-valor {
+  height: 100%;
+  border-radius: 99px;
+}
+
+.informe-barra-etiqueta {
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 34px;
+  text-align: right;
+}
+
+.informe-pie {
+  margin-top: 24px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+  }
+
+  /* Solo el informe llega al papel. Funciona porque InformeModal se monta con
+     createPortal directo en <body>: desde dentro de la app, cualquier
+     contenedor con overflow recortaría las páginas siguientes. */
+  body > *:not(.informe-print-root) {
+    display: none !important;
+  }
+
+  .informe-print-root {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+    animation: none !important;
+  }
+
+  .informe-print-root .informe-marco {
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  .informe-hoja {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* Repite el encabezado de la tabla en cada página. */
+  .informe-tabla thead {
+    display: table-header-group;
+  }
+
+  .informe-salto {
+    break-before: page;
+  }
+
+  .no-imprimir {
+    display: none !important;
+  }
 }
 
 @media (max-width: 900px) {

@@ -1,12 +1,35 @@
+// ============================================================================
+// upload_formacion.mjs — Carga el avance en plataforma de Horizontes Senior:
+// da de alta los cursos en `education_library` y reemplaza `cohort_course_status`.
+//
+//   node scripts/upload_formacion.mjs --commit   → única forma de ejecutarlo
+//
+// ⚠️ NO TIENE DRY RUN: cuando corre, borra e inserta. Por eso exige `--commit`
+// explícito — sin él no hace nada. Antes arrancaba a escribir con solo
+// invocarlo, y bastaba una flecha arriba en la terminal para pisar producción.
+//
+// ⚠️ Lee de `Reportes formacion/`, una carpeta que HOY NO EXISTE en el repo (los
+// demás ETL leen de `bases_de_datos/`). Es decir: tal como está no se puede
+// correr. Se conserva porque es la única implementación de referencia de la
+// carga de avance en plataforma, que es justo lo que hay que replicar para
+// Círculos de Conocimiento. Al construir esa versión, revisar si este sigue
+// haciendo falta o se reemplaza.
+// ============================================================================
 import { createClient } from '@supabase/supabase-js';
 import { credencialesServicio } from './_env.mjs';
 import XLSX from 'xlsx';
-import { readFileSync, readdirSync, statSync } from 'fs';
+import { readdirSync, statSync } from 'fs';
 import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+if (!process.argv.includes('--commit')) {
+  console.log('⚠️  upload_formacion.mjs escribe en producción sin previsualizar (borra e inserta');
+  console.log('   cohort_course_status). No tiene dry run.');
+  console.log('   Si de verdad quieres correrlo: node scripts/upload_formacion.mjs --commit');
+  process.exit(0);
+}
 
 const REPORTES_DIR = resolve(__dirname, '../Reportes formacion');
 const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior

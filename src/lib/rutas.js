@@ -45,9 +45,6 @@ export function rutaActual(cf) {
   return fases.length ? fases[fases.length - 1].ruta : (cf?.ruta_asignada || null);
 }
 
-/** ¿Pasó por más de un grupo? Decide si la UI segmenta por fases o no. */
-export const tieneVariasFases = (cf) => fasesDeMatricula(cf).length > 1;
-
 /**
  * En qué grupo estaba la persona en una fecha dada ('YYYY-MM-DD'), o `null` si
  * no cae en ninguna fase. Lo usan los ETL para etiquetar cada fila de

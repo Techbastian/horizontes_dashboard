@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import InformeModal from '../components/InformeModal';
+import InformeEjecutivo from '../components/InformeEjecutivo';
 import KPICard from '../components/KPICard';
 import FunnelChart from '../components/FunnelChart';
 import DonutChartWidget from '../components/DonutChart';
@@ -35,8 +38,11 @@ function buildTrendData(applications) {
     .slice(-14);
 }
 
-export default function DashboardPage({ metrics, applications, formationProgress, continuidadCirculos }) {
+export default function DashboardPage({ metrics, applications, formationProgress, continuidadCirculos, groupAttendance, retiros, cohort }) {
   const navigate = useNavigate();
+  // Antes del early return: mover un hook debajo cambiaría su número entre
+  // renders y React rompería en cuanto llegaran las métricas.
+  const [informeOpen, setInformeOpen] = useState(false);
 
   if (!metrics) return null;
 
@@ -57,10 +63,27 @@ export default function DashboardPage({ metrics, applications, formationProgress
           <p>Métricas en tiempo real e insights operacionales para Horizontes Senior.</p>
         </div>
         <div className="page-header-actions">
-          <button className="btn btn-secondary">📥 Exportar Reporte</button>
+          <button className="btn btn-secondary" onClick={() => setInformeOpen(true)}>📄 Informe PDF</button>
           <button className="btn btn-primary" onClick={() => navigate('/candidatos')}>👥 Ver Candidatos</button>
         </div>
       </div>
+
+      {informeOpen && (
+        <InformeModal
+          titulo="Informe ejecutivo del programa"
+          subtitulo={cohort?.name ? `${cohort.name} · corte al ${new Date().toLocaleDateString('es-CO', { timeZone: 'America/Bogota' })}` : null}
+          onClose={() => setInformeOpen(false)}
+        >
+          <InformeEjecutivo
+            metrics={metrics}
+            formationProgress={formationProgress}
+            groupAttendance={groupAttendance}
+            retiros={retiros}
+            continuidadCirculos={continuidadCirculos}
+            cohort={cohort}
+          />
+        </InformeModal>
+      )}
 
       {/* Meta del proyecto — 100 formados */}
       {metrics.seleccionados && (

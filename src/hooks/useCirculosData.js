@@ -145,6 +145,13 @@ export function useCirculosData() {
             escolaridad: carac.escolaridad || c.education_level || 'Sin información',
             ciudad: carac.municipio || c.city || 'Sin información',
             activo: e.custom_form_data?.estado_activo !== false && e.status !== 'inactive',
+            // Registro en la plataforma de formación (scripts/upload_registro_circulos.mjs).
+            // `registro` es el estado confirmado por correo y es el que decide
+            // quién está activo; `registroDetalle` conserva el matiz del reporte
+            // —hay 59 personas que coinciden por nombre pero con otro correo— para
+            // no leerlas como "no registrada" a secas mientras se verifican.
+            registro: e.custom_form_data?.registro_plataforma || null,
+            registroDetalle: e.custom_form_data?.registro_plataforma_detalle || null,
             carac,
           };
         })
@@ -158,6 +165,33 @@ export function useCirculosData() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Misma firma que el updateEnrollment de useApplicationsData, a propósito: el
+  // modal de participante no tiene que saber de qué programa viene el perfil.
+  // Va aparte porque cada hook resuelve la matrícula contra SU propia lista —
+  // buscar un enrollment de Círculos en la de Horizontes lanzaba
+  // "Enrollment no encontrado" y dejaba los perfiles de Círculos sin guardar.
+  const updateEnrollment = async (enrollmentId, updates) => {
+    const current = enrollments.find((e) => e.id === enrollmentId);
+    if (!current) throw new Error('Matrícula no encontrada en Círculos de Conocimiento');
+
+    const payload = {};
+    if (updates.custom_form_data !== undefined) {
+      payload.custom_form_data = {
+        ...(current.custom_form_data || {}),
+        ...updates.custom_form_data,
+      };
+    }
+    if (updates.status !== undefined) payload.status = updates.status;
+
+    const { error: updateErr } = await supabase
+      .from('program_enrollments')
+      .update(payload)
+      .eq('id', enrollmentId);
+    if (updateErr) throw updateErr;
+
+    await fetchData();
+  };
 
   const metricas = useMemo(() => {
     if (!participantes.length) return null;
@@ -245,9 +279,21 @@ export function useCirculosData() {
       .map(([nombre, valor]) => ({ nombre, valor }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
 
+    // Registro en plataforma. Se cuenta por el detalle porque el reporte
+    // distingue tres situaciones y agruparlas en "sí/no" escondería a las 59
+    // personas que están a una verificación de correo de quedar activas.
+    const registro = { registrados: 0, porVerificar: 0, noRegistrados: 0, sinDato: 0 };
+    participantes.forEach((p) => {
+      if (!p.registro) registro.sinDato++;
+      else if (/^registrado$/i.test(p.registro)) registro.registrados++;
+      else if (/posible/i.test(p.registroDetalle || '')) registro.porVerificar++;
+      else registro.noRegistrados++;
+    });
+
     return {
       total,
       activos: participantes.filter((p) => p.activo).length,
+      registro,
       genero, mujeres, hombres,
       pctMujeres: total ? Math.round((mujeres / total) * 100) : 0,
       pctHombres: total ? Math.round((hombres / total) * 100) : 0,
@@ -352,6 +398,7 @@ export function useCirculosData() {
     asistenciaSinCargar: asistencia.sinCargar,
     loading,
     error,
+    updateEnrollment,
     refetch: fetchData,
   };
 }

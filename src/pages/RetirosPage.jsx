@@ -1,13 +1,8 @@
 import { useState, useMemo } from 'react';
+import InformeModal from '../components/InformeModal';
+import InformeRetiros from '../components/InformeRetiros';
+import { CATEGORIAS_RETIRO, SIN_CLASIFICAR, colorCategoria } from '../lib/retiros';
 
-const CAT_COLORS = {
-  'Metodología / contenido': '#7c3aed',
-  'Sin contacto': '#64748b',
-  'Situación laboral': '#3b82f6',
-  'Tiempo / disponibilidad': '#f59e0b',
-  'Salud': '#ef4444',
-  'Voluntario / personal': '#0d9488',
-};
 const nivelColor = (n) => /senior/i.test(n) ? '#0d9488' : /activ/i.test(n) ? '#f59e0b' : '#7c3aed';
 
 function fmtFecha(f) {
@@ -17,35 +12,83 @@ function fmtFecha(f) {
   return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function RetirosPage({ retiros, metrics }) {
-  const [selected, setSelected] = useState(null);
-  if (!retiros) return null;
+const hoyBogota = () => new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
 
-  const { casos, enRiesgo, porCategoria, porNivel, total, totalRiesgo } = retiros;
-  const totalSeleccionados = metrics?.seleccionados?.totalElegidos || (metrics?.seleccionados?.totalActivos + total) || total;
-  const tasa = totalSeleccionados > 0 ? ((total / totalSeleccionados) * 100).toFixed(1) : 0;
+// Resumen de asistencia de una persona, para leer un retiro sin motivo escrito.
+function ResumenAsistencia({ a }) {
+  if (!a || !a.medidas) return <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Sin seguimiento</span>;
+  return (
+    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+      {a.asistio}/{a.medidas}
+      {a.faltasSeguidas >= 2 && (
+        <span style={{ color: '#ef4444', fontWeight: 700 }}> · {a.faltasSeguidas} faltas seguidas</span>
+      )}
+    </span>
+  );
+}
+
+export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
+  const [selected, setSelected] = useState(null);
+  // Antes del early return: si el estado se declarara después, el número de
+  // hooks cambiaría entre renders y React rompería al llegar los datos.
+  const [informeOpen, setInformeOpen] = useState(false);
+  const [soloSinClasificar, setSoloSinClasificar] = useState(false);
+
+  const { casos = [], enRiesgo = [], porCategoria = {}, porNivel = {}, total = 0, totalRiesgo = 0, sinClasificar = 0 } = retiros || {};
 
   const catOrdenadas = useMemo(
-    () => Object.entries(porCategoria).sort((a, b) => b[1] - a[1]),
+    // "Sin clasificar" siempre al final: no es una categoría del vocabulario,
+    // es lo que falta por clasificar.
+    () => Object.entries(porCategoria).sort((a, b) => {
+      if ((a[0] === SIN_CLASIFICAR) !== (b[0] === SIN_CLASIFICAR)) return a[0] === SIN_CLASIFICAR ? 1 : -1;
+      return b[1] - a[1];
+    }),
     [porCategoria]
   );
-  const maxCat = catOrdenadas.length ? catOrdenadas[0][1] : 1;
+
+  const visibles = useMemo(
+    () => (soloSinClasificar ? casos.filter((c) => c.sinClasificar) : casos),
+    [casos, soloSinClasificar]
+  );
+
+  if (!retiros) return null;
+
+  const totalSeleccionados = metrics?.seleccionados?.totalElegidos || (metrics?.seleccionados?.totalActivos + total) || total;
+  const tasa = totalSeleccionados > 0 ? ((total / totalSeleccionados) * 100).toFixed(1) : 0;
+  const maxCat = catOrdenadas.length ? Math.max(...catOrdenadas.map(([, n]) => n)) : 1;
 
   return (
     <div className="animate-in">
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div className="page-header-left">
           <h1>Retención y Retiros</h1>
-          <p>Motivos de retiro categorizados y alerta temprana de deserción.</p>
+          <p>Toda persona inactivada aparece aquí, con o sin motivo registrado, junto a las alertas de deserción.</p>
+        </div>
+        <div className="page-header-actions">
+          <button className="btn btn-secondary" onClick={() => setInformeOpen(true)}>📄 Informe PDF</button>
         </div>
       </div>
 
+      {informeOpen && (
+        <InformeModal
+          titulo="Informe de retención y retiros"
+          subtitulo="Horizontes Senior · motivos categorizados y alerta temprana"
+          onClose={() => setInformeOpen(false)}
+        >
+          <InformeRetiros retiros={retiros} metrics={metrics} />
+        </InformeModal>
+      )}
+
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 24 }}>
-        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">🚪</span>Total Retirados</div><div className="kpi-value">{total}</div><div className="kpi-change neutral">con motivo registrado</div></div>
+        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">🚪</span>Total Inactivos</div><div className="kpi-value">{total}</div><div className="kpi-change neutral">{total - sinClasificar} con motivo registrado</div></div>
+        <div className="kpi-card" onClick={() => setSoloSinClasificar(v => !v)} style={{ cursor: sinClasificar ? 'pointer' : 'default', borderTop: soloSinClasificar ? '2px solid #f59e0b' : '2px solid transparent' }}>
+          <div className="kpi-label"><span className="kpi-label-icon">❓</span>Sin Clasificar</div>
+          <div className="kpi-value" style={{ color: sinClasificar ? '#f59e0b' : '#10b981' }}>{sinClasificar}</div>
+          <div className="kpi-change neutral">{sinClasificar ? 'clic para filtrar' : 'todo clasificado'}</div>
+        </div>
         <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">📉</span>Tasa de Retiro</div><div className="kpi-value">{tasa}%</div><div className="kpi-change neutral">de los seleccionados</div></div>
         <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">⚠️</span>En Riesgo</div><div className="kpi-value" style={{ color: '#f59e0b' }}>{totalRiesgo}</div><div className="kpi-change neutral">deserción potencial</div></div>
-        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">🌱</span>Retiros Junior</div><div className="kpi-value">{porNivel.Junior || 0}<span style={{ fontSize: 18, color: 'var(--text-muted)', fontWeight: 400 }}> · {porNivel.Senior || 0} Senior</span></div><div className="kpi-change neutral">por nivel</div></div>
       </div>
 
       {/* Distribución de motivos + por nivel */}
@@ -55,9 +98,9 @@ export default function RetirosPage({ retiros, metrics }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
             {catOrdenadas.map(([cat, n]) => (
               <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, color: 'var(--text-secondary)', width: 190, flexShrink: 0 }}>{cat}</span>
+                <span style={{ fontSize: 13, color: cat === SIN_CLASIFICAR ? '#f59e0b' : 'var(--text-secondary)', width: 190, flexShrink: 0, fontWeight: cat === SIN_CLASIFICAR ? 700 : 400 }}>{cat}</span>
                 <div style={{ flex: 1, background: '#e2e8f0', borderRadius: 99, height: 22, overflow: 'hidden' }}>
-                  <div style={{ width: `${(n / maxCat) * 100}%`, height: '100%', background: CAT_COLORS[cat] || '#64748b', borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
+                  <div style={{ width: `${(n / maxCat) * 100}%`, height: '100%', background: colorCategoria(cat), borderRadius: 99, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{n}</span>
                   </div>
                 </div>
@@ -81,12 +124,25 @@ export default function RetirosPage({ retiros, metrics }) {
 
       {/* Tabla de casos */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <div className="card-header"><div><div className="card-title">Casos de Retiro</div><div className="card-subtitle">{total} personas · click para ver el motivo completo</div></div></div>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Personas Inactivadas</div>
+            <div className="card-subtitle">
+              {visibles.length} {soloSinClasificar ? 'sin clasificar' : 'personas'} · clic para ver el detalle
+              {updateEnrollment ? ' y registrar el motivo' : ''}
+            </div>
+          </div>
+          {soloSinClasificar && (
+            <button className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => setSoloSinClasificar(false)}>
+              Ver todos
+            </button>
+          )}
+        </div>
         <div className="table-container" style={{ marginTop: 8, overflowX: 'auto' }}>
-          <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 760 }}>
-            <thead><tr>{['Persona', 'Nivel', 'Motivo', 'Fecha'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'left', padding: '12px 14px', background: 'rgba(148,163,184,0.08)', fontSize: 12 }}>{h}</th>)}</tr></thead>
+          <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 860 }}>
+            <thead><tr>{['Persona', 'Nivel', 'Motivo', 'Asistencia', 'Fecha'].map(h => <th key={h} style={{ textAlign: 'left', padding: '12px 14px', background: 'rgba(148,163,184,0.08)', fontSize: 12 }}>{h}</th>)}</tr></thead>
             <tbody>
-              {casos.map(c => (
+              {visibles.map(c => (
                 <tr key={c.id} onClick={() => setSelected(c)} style={{ cursor: 'pointer' }}>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4 }}>
                     <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.nombre}</div>
@@ -96,12 +152,22 @@ export default function RetirosPage({ retiros, metrics }) {
                     <span className="badge" style={{ background: `${nivelColor(c.nivel)}22`, color: nivelColor(c.nivel), fontWeight: 700 }}>{/senior/i.test(c.nivel) ? 'Senior' : 'Junior'}</span>
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4 }}>
-                    <span className="badge" style={{ background: `${CAT_COLORS[c.categoria] || '#64748b'}22`, color: CAT_COLORS[c.categoria] || '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>{c.categoria}</span>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.motivo}</div>
+                    <span className="badge" style={{ background: `${colorCategoria(c.categoria)}22`, color: colorCategoria(c.categoria), fontWeight: 600, whiteSpace: 'nowrap' }}>{c.categoria}</span>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.motivo || (c.asistencia?.ultimaExcusa
+                        ? `Última excusa: ${c.asistencia.ultimaExcusa.texto}`
+                        : 'Sin motivo registrado')}
+                    </div>
+                  </td>
+                  <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4 }}>
+                    <ResumenAsistencia a={c.asistencia} />
                   </td>
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4, fontSize: 13, color: 'var(--text-secondary)' }}>{fmtFecha(c.fecha)}</td>
                 </tr>
               ))}
+              {visibles.length === 0 && (
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay personas inactivadas.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -109,7 +175,7 @@ export default function RetirosPage({ retiros, metrics }) {
 
       {/* En riesgo */}
       <div className="card">
-        <div className="card-header"><div><div className="card-title">⚠️ En Riesgo de Deserción</div><div className="card-subtitle">{totalRiesgo} casos que expresaron intención de retirarse — alerta temprana</div></div></div>
+        <div className="card-header"><div><div className="card-title">⚠️ En Riesgo de Deserción</div><div className="card-subtitle">{totalRiesgo} casos con una novedad registrada — alerta temprana. Se marcan desde el perfil en Formación.</div></div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
           {enRiesgo.map(r => (
             <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', background: r.yaRetirado ? 'rgba(239,68,68,0.06)' : 'rgba(245,158,11,0.06)', border: `1px solid ${r.yaRetirado ? 'rgba(239,68,68,0.2)' : 'rgba(245,158,11,0.2)'}`, borderRadius: 10 }}>
@@ -119,40 +185,193 @@ export default function RetirosPage({ retiros, metrics }) {
                   <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{r.nombre}</span>
                   {r.ruta && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {r.ruta}</span>}
                   <span style={{ fontSize: 11, fontWeight: 700, color: r.yaRetirado ? '#ef4444' : '#f59e0b' }}>{r.yaRetirado ? 'Ya retirado' : 'Activo · en riesgo'}</span>
+                  {r.canal && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· por {r.canal}</span>}
+                  {r.fecha && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {fmtFecha(r.fecha)}</span>}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>{r.situacion}</div>
               </div>
+              <ResumenAsistencia a={r.asistencia} />
             </div>
           ))}
+          {enRiesgo.length === 0 && (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '8px 2px' }}>
+              Nadie marcado en riesgo. Se registra desde el perfil de cada participante en Formación.
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Modal detalle motivo */}
       {selected && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,6,23,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-          onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>
-          <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div><div style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>{selected.nombre}</div><div style={{ fontSize: 13, color: '#64748b' }}>{selected.email}</div></div>
-              <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#64748b', fontSize: 22, cursor: 'pointer' }}>×</button>
-            </div>
-            <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <span className="badge" style={{ background: `${CAT_COLORS[selected.categoria] || '#64748b'}22`, color: CAT_COLORS[selected.categoria] || '#475569', fontWeight: 700 }}>{selected.categoria}</span>
-                <span className="badge" style={{ background: `${nivelColor(selected.nivel)}22`, color: nivelColor(selected.nivel), fontWeight: 700 }}>{/senior/i.test(selected.nivel) ? 'Senior' : 'Junior'}</span>
-                <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'center' }}>{fmtFecha(selected.fecha)}</span>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Motivo de retiro</div>
-                <div style={{ background: '#ffffff', borderRadius: 10, padding: '14px 16px', fontSize: 14, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{selected.motivo}</div>
-              </div>
-              {selected.evidencia && (
-                <a href={selected.evidencia} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: '#0d9488' }}>📎 Ver evidencia</a>
-              )}
+        <DetalleRetiro
+          caso={selected}
+          onClose={() => setSelected(null)}
+          onGuardar={updateEnrollment}
+        />
+      )}
+    </div>
+  );
+}
+
+// Detalle de un caso: el motivo tal como está, las excusas que dejó en las
+// actividades a las que no fue, y —si la página recibió `updateEnrollment`— el
+// formulario para clasificar a quien todavía no tiene motivo.
+function DetalleRetiro({ caso, onClose, onGuardar }) {
+  const [categoria, setCategoria] = useState(
+    CATEGORIAS_RETIRO.includes(caso.categoria) ? caso.categoria : 'Voluntario / personal'
+  );
+  const [motivo, setMotivo] = useState(caso.motivo || '');
+  const [fecha, setFecha] = useState(caso.fecha || hoyBogota());
+  const [guardando, setGuardando] = useState(false);
+  const [error, setError] = useState(null);
+
+  const editable = !!onGuardar;
+  const motivoLimpio = motivo.trim();
+
+  const guardar = async () => {
+    if (!motivoLimpio) { setError('Escribe el motivo para poder guardar.'); return; }
+    setGuardando(true);
+    setError(null);
+    try {
+      await onGuardar(caso.id, {
+        custom_form_data: {
+          retiro: {
+            categoria,
+            motivo: motivoLimpio,
+            fecha: fecha || hoyBogota(),
+            nivel: caso.nivel,
+            // Deja rastro de que se clasificó desde el dashboard y no desde la
+            // plantilla de PQRS, por si hay que reconciliar las dos fuentes.
+            origen: 'dashboard',
+          },
+          estado_activo: false,
+        },
+        status: 'inactive',
+      });
+      onClose();
+    } catch (e) {
+      setError(e.message || 'No se pudo guardar.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div className="modal-header-info">
+            <div>
+              <div className="modal-name">{caso.nombre}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{caso.email} · {caso.doc}</div>
             </div>
           </div>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">✕</button>
         </div>
-      )}
+
+        <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            <span className="badge" style={{ background: `${colorCategoria(caso.categoria)}22`, color: colorCategoria(caso.categoria), fontWeight: 700 }}>{caso.categoria}</span>
+            <span className="badge" style={{ background: `${nivelColor(caso.nivel)}22`, color: nivelColor(caso.nivel), fontWeight: 700 }}>{/senior/i.test(caso.nivel) ? 'Senior' : 'Junior'}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>{fmtFecha(caso.fecha)}</span>
+          </div>
+
+          {/* Cómo venía asistiendo: es el contexto que explica la salida. */}
+          {caso.asistencia?.medidas > 0 && (
+            <div className="modal-section">
+              <div className="modal-section-title">Asistencia antes de salir</div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                Asistió a {caso.asistencia.asistio} de {caso.asistencia.medidas} actividades medidas
+                {caso.asistencia.faltasSeguidas >= 2 && (
+                  <strong style={{ color: '#ef4444' }}> · {caso.asistencia.faltasSeguidas} faltas seguidas al final</strong>
+                )}.
+              </div>
+            </div>
+          )}
+
+          {caso.motivo && (
+            <div className="modal-section">
+              <div className="modal-section-title">Motivo de retiro</div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', fontSize: 14, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {caso.motivo}
+              </div>
+            </div>
+          )}
+
+          {/* Excusas dejadas actividad por actividad. Estaban en la base desde el
+              ETL pero no se veían en ninguna pantalla. */}
+          {caso.excusas?.length > 0 && (
+            <div className="modal-section">
+              <div className="modal-section-title">Excusas registradas ({caso.excusas.length})</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {caso.excusas.map((e, i) => (
+                  <div key={i} style={{ background: 'var(--bg-card)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
+                      {e.actividad}{e.fecha ? ` · ${fmtFecha(e.fecha)}` : ''} · {e.grupo}
+                      {e.asistio === false ? ' · no asistió' : e.asistio === true ? ' · asistió' : ''}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.5 }}>{e.texto}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {caso.evidencia && (
+            <a href={caso.evidencia} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, color: 'var(--accent-teal)' }}>📎 Ver evidencia</a>
+          )}
+
+          {editable && (
+            <div className="modal-section">
+              <div className="modal-section-title">
+                {caso.sinClasificar ? 'Registrar el motivo' : 'Corregir la clasificación'}
+              </div>
+              {caso.sinClasificar && (
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Esta persona quedó inactiva sin motivo (viene marcada INACTIVO en la matriz).
+                  Clasificarla la hace contar en los gráficos y en el informe.
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Categoría</label>
+                  <select className="filter-select" style={{ width: '100%' }} value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+                    {CATEGORIAS_RETIRO.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Fecha</label>
+                  <input
+                    type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+                    style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 10px', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+                  />
+                </div>
+              </div>
+              <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Comentario</label>
+              <textarea
+                value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3}
+                placeholder="Qué pasó, cómo se supo, con quién se habló…"
+                style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border-light)', borderRadius: 8, padding: '9px 12px', color: 'var(--text-primary)', fontSize: 13.5, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}
+              />
+              {caso.asistencia?.ultimaExcusa && !motivoLimpio && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: 'auto', padding: '6px 12px', marginTop: 8 }}
+                  onClick={() => setMotivo(caso.asistencia.ultimaExcusa.texto)}
+                >
+                  Usar su última excusa
+                </button>
+              )}
+              {error && <div style={{ fontSize: 12, color: 'var(--accent-rose)', marginTop: 8 }}>{error}</div>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+                <button className="btn btn-secondary" onClick={onClose} disabled={guardando}>Cancelar</button>
+                <button className="btn btn-primary" onClick={guardar} disabled={guardando || !motivoLimpio}>
+                  {guardando ? 'Guardando…' : 'Guardar motivo'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

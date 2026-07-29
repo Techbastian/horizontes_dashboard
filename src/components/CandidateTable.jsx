@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { enriquecerPostulaciones } from '../lib/postulaciones';
 
 function getScoreColor(score, max) {
   const pct = score / max;
@@ -91,57 +92,13 @@ export default function CandidateTable({ applications, enrollments, onSelectCand
     };
   }, [applications, enrollments]);
 
-  // Enriched data
-  const enriched = useMemo(() => {
-    const enrolledSet = new Set(
-      (enrollments || [])
-        .filter(e => e.custom_form_data?.estado_activo === true)
-        .map(e => e.candidate?.id)
-        .filter(Boolean)
-    );
-
-    // Mapa candidate_id → custom_form_data del enrollment (para el nivel de selección).
-    // Se excluyen los que nunca fueron elegidos (elegido === false).
-    const enrollmentMap = new Map();
-    (enrollments || []).forEach(e => {
-      if (e.candidate?.id && e.custom_form_data?.elegido !== false) {
-        enrollmentMap.set(e.candidate.id, e.custom_form_data || {});
-      }
-    });
-
-    return applications.map(app => {
-      const ca = app.custom_answers || {};
-      const fases = ca.seguimiento_fases || {};
-      const isRejected = fases.elegibilidad === 'rejected';
-
-      const pFase2 = (typeof fases.puntaje_tecnico === 'number') ? fases.puntaje_tecnico : null;
-      let pFase3 = null;
-      if (typeof fases.puntaje_entrevista === 'number') {
-        pFase3 = fases.puntaje_entrevista;
-      } else if (fases.puntaje_entrevista === '0' || fases.puntaje_entrevista === 0) {
-        pFase3 = 0;
-      }
-
-      return {
-        ...app,
-        fullName: `${app.candidate?.first_name || ''} ${app.candidate?.last_name || ''}`.trim(),
-        documentNumber: app.candidate?.document_number || '',
-        grupo: fases.grupo_asignado || 'Sin asignar',
-        elegibilidadStatus: isRejected ? 'No elegible' : 'Elegible',
-        isRejected,
-        puntajeTecnico: isRejected ? null : pFase2,
-        puntajeActitudinal: isRejected ? null : pFase3,
-        puntajeTotal: isRejected ? null : (typeof fases.puntaje_total === 'number' ? fases.puntaje_total : null),
-        email: app.candidate?.email || '',
-        esCuidador: ca.es_cuidador === true,
-        isFinalSelected: enrolledSet.has(app.candidate?.id),
-        nivelSeleccion: enrollmentMap.get(app.candidate?.id)?.ruta_asignada || null,
-        nivelActivo: enrollmentMap.has(app.candidate?.id)
-          ? enrollmentMap.get(app.candidate?.id)?.estado_activo !== false
-          : false,
-      };
-    });
-  }, [applications, enrollments]);
+  // Enriched data. La proyección vive en src/lib/postulaciones.js porque la
+  // exportación a Excel usa exactamente la misma: si se calculara aquí dentro,
+  // el archivo y la tabla podrían decir cosas distintas.
+  const enriched = useMemo(
+    () => enriquecerPostulaciones(applications, enrollments || []),
+    [applications, enrollments]
+  );
 
   // Filtered & sorted
   const filtered = useMemo(() => {

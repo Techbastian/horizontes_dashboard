@@ -1,6 +1,10 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
 import { fasesDeMatricula, rutaActual } from '../lib/rutas';
+import { exportarFormacion, filtrarPerfiles } from '../lib/exportar';
+import ExportExcelModal from '../components/ExportExcelModal';
+import InformeModal from '../components/InformeModal';
+import InformeAsistencia from '../components/InformeAsistencia';
 
 
 // Cada programa trae sus propios grupos. Horizontes Senior se divide en rutas;
@@ -12,11 +16,17 @@ const PROGRAMAS = {
     // HS pondera sesiones 35% / cafés 40% / entregables 25%; Círculos solo tiene
     // sesiones, así que su "total" es la asistencia simple y esas columnas sobran.
     columnasExtra: true,
+    // Destinos posibles al mover a alguien de grupo. Activación quedó fuera a
+    // propósito: es fase histórica, no destino.
+    rutas: ['Senior', 'Junior'],
   },
   'circulos-de-conocimiento': {
     nombre: 'Círculos de Conocimiento',
     grupos: ['Círculos'],
     columnasExtra: false,
+    // Grupo único: no hay cambio de nivel que registrar, así que el modal
+    // muestra el grupo como dato y solo deja editar el estado y el retiro.
+    rutas: ['Círculos'],
   },
 };
 
@@ -196,6 +206,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
       }
     : { enrollments, formationProgress, attendanceByCandidate, groupAttendance, asistenciaSinCargar };
 
+  // Guardar un perfil va contra el hook del programa que se está viendo.
+  const guardarMatricula = esCirculos ? circulos?.updateEnrollment : updateEnrollment;
+
   // Al cambiar de programa cambian los grupos: la pestaña anterior no existe.
   const cambiarPrograma = (slug) => {
     setPrograma(slug);
@@ -314,6 +327,72 @@ export default function FormationPage({ enrollments = [], formationProgress, att
   const meta = GROUP_META[activeTab];
   const st = groupStats[activeTab] || {};
 
+  // ── Exportación ───────────────────────────────────────────────────────────
+  // Qué se lleva el Excel lo decide el usuario en el modal; aquí solo se
+  // declaran los filtros disponibles y se le pasa lo que ya está en pantalla.
+  const [exportOpen, setExportOpen] = useState(false);
+  const [informeOpen, setInformeOpen] = useState(false);
+
+  const camposExport = useMemo(() => [
+    {
+      id: 'grupos',
+      label: 'Grupos',
+      tipo: 'checks',
+      opciones: GROUPS.map((g) => ({
+        id: g,
+        label: GROUP_META[g]?.label || g,
+        hint: `${groupStats[g]?.activos ?? 0} activos · ${groupStats[g]?.inactivos ?? 0} inactivos`,
+      })),
+    },
+    {
+      id: 'estado',
+      label: 'Estado',
+      tipo: 'radio',
+      opciones: [
+        { id: 'todos', label: 'Activos e inactivos' },
+        { id: 'activos', label: 'Solo activos' },
+        { id: 'inactivos', label: 'Solo inactivos', hint: 'Para revisar retiros' },
+      ],
+    },
+    {
+      id: 'hojas',
+      label: 'Hojas del libro',
+      tipo: 'checks',
+      opciones: [
+        { id: 'matriculas', label: 'Matrículas', hint: 'Una fila por persona con su estado' },
+        { id: 'asistencia', label: 'Matriz de asistencia', hint: 'Una hoja por grupo: personas × actividades' },
+        { id: 'detalle', label: 'Detalle por actividad', hint: 'Una fila por persona y actividad, para tablas dinámicas' },
+      ],
+    },
+    {
+      id: 'columnas',
+      label: 'Columnas opcionales',
+      tipo: 'checks',
+      opciones: [
+        { id: 'contacto', label: 'Contacto', hint: 'Correo, teléfono y ciudad' },
+        ...(cfg.columnasExtra
+          ? [{ id: 'historial', label: 'Historial de rutas', hint: 'Por qué grupos pasó y desde cuándo' }]
+          : []),
+        { id: 'plataforma', label: 'Avance en plataforma' },
+        { id: 'riesgo', label: 'Riesgo y retiro', hint: 'Categoría, motivo y fecha' },
+      ],
+    },
+  ], [GROUPS, groupStats, cfg.columnasExtra]);
+
+  const valoresExport = useMemo(() => ({
+    grupos: GROUPS,
+    estado: 'todos',
+    hojas: ['matriculas', 'asistencia'],
+    columnas: ['contacto', ...(cfg.columnasExtra ? ['historial'] : []), 'plataforma', 'riesgo'],
+  }), [GROUPS, cfg.columnasExtra]);
+
+  const resumenExport = (v) => {
+    const n = filtrarPerfiles(profiles, { grupos: v.grupos, estado: v.estado }).length;
+    const hojas = (v.hojas || []).length;
+    if (!hojas) return 'Selecciona al menos una hoja.';
+    return `${n} participante${n === 1 ? '' : 's'} · ${hojas} tipo${hojas === 1 ? '' : 's'} de hoja`;
+  };
+
   return (
     <div className="animate-in">
       <div className="page-header" style={{ marginBottom: 20 }}>
@@ -325,8 +404,8 @@ export default function FormationPage({ enrollments = [], formationProgress, att
               : 'Asistencia y avance formativo por grupo · Senior, Junior y Estrategia de Activación.'}
           </p>
         </div>
-        {circulos && (
-          <div className="page-header-actions">
+        <div className="page-header-actions">
+          {circulos && (
             <select
               className="filter-select"
               value={programa}
@@ -337,8 +416,10 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 <option key={slug} value={slug}>{p.nombre}</option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+          <button className="btn btn-secondary" onClick={() => setExportOpen(true)}>📊 Exportar Excel</button>
+          <button className="btn btn-secondary" onClick={() => setInformeOpen(true)}>📄 Informe PDF</button>
+        </div>
       </div>
 
       {/* KPIs por grupo */}
@@ -532,18 +613,58 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         </div>
       </div>
 
+      {exportOpen && (
+        <ExportExcelModal
+          titulo="Exportar formación a Excel"
+          descripcion={cfg.nombre}
+          campos={camposExport}
+          valoresIniciales={valoresExport}
+          resumen={resumenExport}
+          onClose={() => setExportOpen(false)}
+          onExportar={(opciones) => exportarFormacion({
+            programa: cfg.nombre,
+            perfiles: profiles,
+            asistencia: datos.attendanceByCandidate,
+            avancePorCandidato: progressByCandidateId,
+            columnasExtra: cfg.columnasExtra,
+            opciones,
+          })}
+        />
+      )}
+
+      {informeOpen && (
+        <InformeModal
+          titulo="Informe de asistencia"
+          subtitulo={`${cfg.nombre}${sesInfo.lastFecha ? ` · datos al ${fechaCorta(sesInfo.lastFecha)}` : ''}`}
+          onClose={() => setInformeOpen(false)}
+        >
+          <InformeAsistencia
+            programa={cfg.nombre}
+            grupos={GROUPS}
+            groupStats={groupStats}
+            groupAttendance={datos.groupAttendance}
+            perfiles={profiles}
+            asistencia={datos.attendanceByCandidate}
+            sinCargar={datos.asistenciaSinCargar}
+            columnasExtra={cfg.columnasExtra}
+            etiquetaGrupo={(g) => GROUP_META[g]?.label || g}
+          />
+        </InformeModal>
+      )}
+
       {selectedProfile && (
         <ParticipantDetailModal
           profile={selectedProfile}
           courseProgress={progressByCandidateId[selectedProfile.candidate_id]}
           attendance={datos.attendanceByCandidate[selectedProfile.candidate_id]}
           onClose={() => setSelectedProfile(null)}
-          // Solo Horizontes Senior es editable: `updateEnrollment` resuelve el
-          // enrollment contra la lista de HS y con uno de Círculos lanzaría
-          // "Enrollment no encontrado". Los flujos que edita el modal (retiro,
-          // riesgo, cambio de nivel) tampoco están definidos para Círculos.
-          onSave={updateEnrollment && !esCirculos
-            ? async (id, updates) => { await updateEnrollment(id, updates); setSelectedProfile(null); }
+          rutas={cfg.rutas}
+          // Cada programa guarda con la función de SU hook: la matrícula se
+          // resuelve contra su propia lista. Antes se usaba siempre la de
+          // Horizontes y editar a alguien de Círculos lanzaba
+          // "Enrollment no encontrado".
+          onSave={guardarMatricula
+            ? async (id, updates) => { await guardarMatricula(id, updates); setSelectedProfile(null); }
             : null}
         />
       )}

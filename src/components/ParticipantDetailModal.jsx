@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { GRUPO_CLASS } from '../lib/eventos';
 import { cambiarDeRuta, fasesDeMatricula } from '../lib/rutas';
+import { CATEGORIAS_RETIRO, CANALES_RIESGO } from '../lib/retiros';
 
 function progressColor(pct) {
   if (pct >= 75) return '#10b981';
@@ -20,23 +21,16 @@ function ProgressBar({ pct }) {
   );
 }
 
-// Destinos a los que se puede mover a alguien. Activación NO está: fue una
-// estrategia de arranque, no un grupo permanente, y sus participantes siguen el
-// cronograma Junior (ver scripts/reclasificar_activacion_junior.mjs). Sigue
-// existiendo como FASE en el historial de quien pasó por ahí.
+// Destinos a los que se puede mover a alguien en Horizontes Senior. Activación
+// NO está: fue una estrategia de arranque, no un grupo permanente, y sus
+// participantes siguen el cronograma Junior (ver
+// scripts/reclasificar_activacion_junior.mjs). Sigue existiendo como FASE en el
+// historial de quien pasó por ahí.
+//
+// Es solo el valor por defecto: cada programa pasa el suyo por `rutas`. En
+// Círculos de Conocimiento hay un único grupo, así que llega una sola opción y
+// el selector se muestra como dato, no como campo editable.
 const RUTAS = ['Senior', 'Junior'];
-
-// Las mismas seis categorías que clasifica scripts/upload_retiros.mjs. RetirosPage
-// agrupa por este campo: inventar una categoría nueva aquí la dejaría fuera de los
-// gráficos, así que el vocabulario se mantiene idéntico al del ETL.
-const CATEGORIAS_RETIRO = [
-  'Situación laboral',
-  'Salud',
-  'Metodología / contenido',
-  'Sin contacto',
-  'Tiempo / disponibilidad',
-  'Voluntario / personal',
-];
 
 const hoyBogota = () => new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
 
@@ -115,13 +109,16 @@ function Dots({ items, labelPrefix }) {
   );
 }
 
-export default function ParticipantDetailModal({ profile, courseProgress, attendance, onClose, onSave }) {
+export default function ParticipantDetailModal({ profile, courseProgress, attendance, onClose, onSave, rutas = RUTAS }) {
   // Se arranca SIEMPRE en la ruta actual de la persona, y si esa ruta ya no es un
   // destino ofrecido (Activación, o "Sin asignar") se agrega al selector. Forzar
   // otra de entrada activaría el botón de guardar sin que nadie tocara nada, y
   // registraría un cambio de grupo que nadie pidió.
   const [ruta, setRuta] = useState(profile.ruta);
-  const rutasDisponibles = RUTAS.includes(profile.ruta) ? RUTAS : [profile.ruta, ...RUTAS];
+  const rutasDisponibles = rutas.includes(profile.ruta) ? rutas : [profile.ruta, ...rutas];
+  // Un solo destino posible (Círculos) = no hay a dónde mover a nadie: el campo
+  // se muestra como información y no como un selector que no hace nada.
+  const puedeCambiarRuta = rutasDisponibles.length > 1;
   const [isActive, setIsActive] = useState(profile.isActive);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -133,6 +130,14 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
   );
   const [motivo, setMotivo] = useState(profile.retiro?.motivo || '');
   const [fechaRetiro, setFechaRetiro] = useState(profile.retiro?.fecha || hoyBogota());
+
+  // Novedad de riesgo. Hasta ahora `en_riesgo` solo lo escribía el ETL de la
+  // plantilla de PQRS: si el equipo se enteraba por una llamada, no había dónde
+  // registrarlo y la persona nunca aparecía en la alerta temprana de /retiros.
+  const cfActual = profile.customFormData || {};
+  const [enRiesgo, setEnRiesgo] = useState(!!cfActual.en_riesgo);
+  const [riesgoSituacion, setRiesgoSituacion] = useState(cfActual.riesgo_situacion || '');
+  const [riesgoCanal, setRiesgoCanal] = useState(cfActual.riesgo_canal || 'Llamada');
 
   // Cambio de grupo. La fecha de corte es DESDE CUÁNDO cuenta el grupo nuevo:
   // las actividades del grupo anterior siguen contando hasta el día previo, y
@@ -155,11 +160,18 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
       categoria !== (profile.retiro?.categoria || '') ||
       fechaRetiro !== (profile.retiro?.fecha || ''));
 
-  const hasChanges = ruta !== profile.ruta || isActive !== profile.isActive || cambioMotivo;
+  const situacionLimpia = riesgoSituacion.trim();
+  const cambioRiesgo =
+    enRiesgo !== !!cfActual.en_riesgo ||
+    (enRiesgo && (situacionLimpia !== (cfActual.riesgo_situacion || '') || riesgoCanal !== (cfActual.riesgo_canal || '')));
+
+  const hasChanges = ruta !== profile.ruta || isActive !== profile.isActive || cambioMotivo || cambioRiesgo;
 
   // Al inactivar se exige el motivo: un retiro sin razón no sirve para nada en la
   // página de Retiros, y es el momento en que se sabe. Reactivar no lo pide.
   const faltaMotivo = seVaAInactivar && !motivoLimpio;
+  // Marcar en riesgo sin decir qué pasó deja una alerta que nadie puede atender.
+  const faltaSituacion = enRiesgo && !situacionLimpia;
 
   const handleSave = async () => {
     if (!onSave) return;
@@ -196,6 +208,17 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
         // Retiros contradiciendo su estado. Se archiva en vez de borrarse.
         custom.retiro = null;
         custom.retiro_anterior = profile.retiro;
+      }
+
+      // Novedad de riesgo. Se guarda con la misma forma que escribe el ETL de
+      // PQRS (`en_riesgo` + `riesgo_*`), para que /retiros no distinga de dónde
+      // vino la alerta. Al desmarcar se limpia la situación: dejarla puesta haría
+      // que reapareciera entera si alguien vuelve a marcar la casilla.
+      if (cambioRiesgo) {
+        custom.en_riesgo = enRiesgo;
+        custom.riesgo_situacion = enRiesgo ? situacionLimpia : null;
+        custom.riesgo_canal = enRiesgo ? riesgoCanal : null;
+        custom.riesgo_fecha = enRiesgo ? hoyBogota() : null;
       }
 
       await onSave(profile.id, {
@@ -469,18 +492,29 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
 
               {/* Ruta */}
               <div>
-                <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Ruta Asignada</label>
-                <select
-                  value={ruta}
-                  onChange={e => setRuta(e.target.value)}
-                  style={{
-                    width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
-                    borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 14,
-                    outline: 'none', cursor: 'pointer',
-                  }}
-                >
-                  {rutasDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+                <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>
+                  {puedeCambiarRuta ? 'Ruta Asignada' : 'Grupo'}
+                </label>
+                {puedeCambiarRuta ? (
+                  <select
+                    value={ruta}
+                    onChange={e => setRuta(e.target.value)}
+                    style={{
+                      width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                      borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 14,
+                      outline: 'none', cursor: 'pointer',
+                    }}
+                  >
+                    {rutasDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                ) : (
+                  <div style={{
+                    width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0',
+                    borderRadius: 8, padding: '9px 12px', color: '#475569', fontSize: 14,
+                  }}>
+                    {ruta} <span style={{ fontSize: 12, color: '#94a3b8' }}>· grupo único</span>
+                  </div>
+                )}
               </div>
 
               {/* Estado */}
@@ -636,6 +670,70 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                 pero se conserva en el histórico de la persona.
               </div>
             )}
+
+            {/* Novedad de riesgo: alerta temprana. Es independiente del retiro —
+                se marca mientras la persona SIGUE activa, que es cuando sirve. */}
+            <div style={{
+              marginTop: 16, padding: '16px 18px', borderRadius: 10,
+              background: '#ffffff', border: '1px solid #e2e8f0',
+              borderLeft: `3px solid ${enRiesgo ? '#f59e0b' : '#cbd5e1'}`,
+            }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={enRiesgo}
+                  onChange={e => setEnRiesgo(e.target.checked)}
+                  style={{ accentColor: '#f59e0b', width: 16, height: 16 }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                  ⚠️ En riesgo de deserción
+                </span>
+              </label>
+              <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, lineHeight: 1.5 }}>
+                Márcalo cuando la persona exprese que puede retirarse o deje de responder.
+                Aparece en la alerta temprana de Retención y Retiros, sin necesidad de inactivarla.
+              </div>
+
+              {enRiesgo && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px', gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Qué pasó</label>
+                      <textarea
+                        value={riesgoSituacion}
+                        onChange={e => setRiesgoSituacion(e.target.value)}
+                        rows={2}
+                        placeholder="Dijo que por el trabajo no alcanza a conectarse…"
+                        style={{
+                          width: '100%', background: '#ffffff', border: `1px solid ${faltaSituacion ? '#ef4444' : '#cbd5e1'}`,
+                          borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 13.5,
+                          outline: 'none', fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5,
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 12, color: '#64748b', display: 'block', marginBottom: 6 }}>Cómo se supo</label>
+                      <select
+                        value={riesgoCanal}
+                        onChange={e => setRiesgoCanal(e.target.value)}
+                        style={{
+                          width: '100%', background: '#ffffff', border: '1px solid #cbd5e1',
+                          borderRadius: 8, padding: '9px 12px', color: '#0f172a', fontSize: 14,
+                          outline: 'none', cursor: 'pointer',
+                        }}
+                      >
+                        {CANALES_RIESGO.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {faltaSituacion && (
+                    <div style={{ fontSize: 12, color: '#ef4444' }}>
+                      Describe la situación: una alerta sin contexto no se puede atender.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {error && (
@@ -654,15 +752,18 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
             </button>
             <button
               onClick={handleSave}
-              disabled={!hasChanges || saving || !canSave || faltaMotivo}
-              style={{
-                padding: '9px 24px', borderRadius: 8, border: 'none',
-                background: hasChanges && !saving && canSave && !faltaMotivo ? '#0d9488' : '#e2e8f0',
-                color: hasChanges && !saving && canSave && !faltaMotivo ? '#fff' : '#475569',
-                fontSize: 13, fontWeight: 600,
-                cursor: hasChanges && !saving && canSave && !faltaMotivo ? 'pointer' : 'not-allowed',
-                transition: 'all 0.15s',
-              }}
+              disabled={!hasChanges || saving || !canSave || faltaMotivo || faltaSituacion}
+              style={(() => {
+                const puede = hasChanges && !saving && canSave && !faltaMotivo && !faltaSituacion;
+                return {
+                  padding: '9px 24px', borderRadius: 8, border: 'none',
+                  background: puede ? '#0d9488' : '#e2e8f0',
+                  color: puede ? '#fff' : '#475569',
+                  fontSize: 13, fontWeight: 600,
+                  cursor: puede ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.15s',
+                };
+              })()}
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>

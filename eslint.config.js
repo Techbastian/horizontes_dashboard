@@ -15,7 +15,7 @@ import globals from 'globals';
 import react from 'eslint-plugin-react';
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**', 'src/counter.ts', 'src/main.ts'] },
+  { ignores: ['dist/**', 'node_modules/**'] },
 
   // Frontend: React con runtime automático de JSX (no hace falta importar React).
   {

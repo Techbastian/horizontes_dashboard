@@ -33,6 +33,16 @@ const supabase = createClient(url, key);
 const norm = (d) => String(d ?? '').replace(/\D/g, '').trim();
 const lc = (s) => String(s ?? '').toLowerCase().trim();
 
+// Auditoría del mapeo columna-de-observaciones → actividad. Se imprime en cada
+// corrida: si mañana cambia el layout de la matriz, se ve en el resumen en vez
+// de perderse en silencio (que es justo como se corrompieron las excusas antes).
+const OBS_MAPEO = new Map(); // "hoja|columna" → { actividad, n }
+const OBS_HUERFANAS = new Map(); // "hoja|columna" → n
+// Celdas de sesión que no le correspondían a la persona en esa fecha (ver el
+// filtro por `sesionesPorGrupo` más abajo). Se listan para que la decisión sea
+// visible y no un descarte silencioso.
+const SESIONES_DESCARTADAS = [];
+
 // ── Parseo de una hoja de seguimiento ──────────────────────────────────────
 // ¿La actividad todavía no ha ocurrido? Comparación por cadena 'YYYY-MM-DD'
 // contra hoy en Bogotá (UTC-5 fijo): comparar objetos Date da un día de error,
@@ -80,8 +90,49 @@ function parseSeguimiento(wb, sheetName, grupo) {
     const doc = norm(r['Número de Documento']);
     if (!doc) continue;
     const sesiones = [], cafes = [], entregables = [];
-    // Una columna "Observaci..." pertenece a la actividad que la precede en el Excel.
-    // Ej: "Observaciones Sesion 06/07" queda pegada a la sesión 06/07 (no a todas las sesiones).
+    // A qué actividad pertenece cada columna "Observaci…": SE LEE DE SU PROPIO
+    // NOMBRE, no de la posición en la hoja.
+    //
+    // Antes se pegaba a la actividad que la precedía, y el layout real de la
+    // matriz rompe esa suposición en tres sitios distintos (verificado el
+    // 2026-07-29 contra el archivo del 28/07):
+    //   • Junior: las dos columnas de observaciones van DESPUÉS de las dos
+    //     sesiones (…Sesion 06/07 | Sesion 27/07 | Obs 06/07 | Obs 27/07), así
+    //     que las excusas del 06/07 se escribían sobre la sesión del 27/07 y
+    //     acto seguido las pisaba la observación del 27/07: 19 excusas perdidas.
+    //   • Activación: las cinco columnas de observación van después de las cinco
+    //     sesiones, y las cinco colapsaban sobre la Sesión 5 (así quedó cargado).
+    //   • "Observacion de cafe 3" va después del Café 6 → caía en el Café 6.
+    //
+    // La fecha manda sobre el número porque los encabezados de Activación traen
+    // el número equivocado: "Observacion 4 22/07/2028" es de la Sesión 5
+    // (22/07), no de la 4. Si el nombre no dice nada (la columna genérica
+    // "Observaciones" del final), se cae a la actividad anterior, que es el
+    // comportamiento viejo.
+    const actividadDeObservacion = (col) => {
+      const t = String(col);
+      const esCafe = /caf[eé]/i.test(t);
+      const esSesion = /sesi[oó]n/i.test(t);
+      const candidatas = esCafe ? cafes : esSesion ? sesiones : [...sesiones, ...cafes];
+
+      const fecha = extractDate(t.replace(/^observaci[oó]n(es)?/i, ''));
+      if (fecha) {
+        const porFecha = candidatas.find((a) => a.fecha === fecha);
+        if (porFecha) return porFecha;
+      }
+
+      // Sin fecha utilizable: el número, pero solo cuando el encabezado dice de
+      // qué tipo de actividad habla.
+      const sinFechas = t.replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, '');
+      const n = parseInt(String(sinFechas).match(/\d+/)?.[0], 10);
+      if (n) {
+        if (esCafe) return cafes.find((c) => c.num === n) || null;
+        if (esSesion) return sesiones.find((s) => parseInt(String(s.actividad).match(/\d+/)?.[0], 10) === n) || null;
+      }
+      return null;
+    };
+
+    const observacionesPendientes = [];
     let lastActivity = null;
     for (const [col, val] of Object.entries(r)) {
       if (/^__empty/i.test(col)) continue;
@@ -100,7 +151,22 @@ function parseSeguimiento(wb, sheetName, grupo) {
         lastActivity = { actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val), observacion: null };
         entregables.push(lastActivity);
       } else if (/^observaci/i.test(col)) {
-        if (val && lastActivity) lastActivity.observacion = String(val).trim();
+        // Se resuelve al final de la fila: una observación puede referirse a una
+        // actividad cuya columna todavía no se ha leído.
+        if (val) observacionesPendientes.push({ col, val, anterior: lastActivity });
+      }
+    }
+
+    for (const o of observacionesPendientes) {
+      const destino = actividadDeObservacion(o.col) || o.anterior;
+      const k = `${sheetName}|${o.col}`;
+      if (destino) {
+        destino.observacion = String(o.val).trim();
+        const prev = OBS_MAPEO.get(k) || { actividad: destino.actividad, n: 0 };
+        prev.n++;
+        OBS_MAPEO.set(k, prev);
+      } else {
+        OBS_HUERFANAS.set(k, (OBS_HUERFANAS.get(k) || 0) + 1);
       }
     }
     const num = (v) => { const n = parseFloat(String(v).replace(',', '.')); return Number.isNaN(n) ? null : n; };
@@ -198,6 +264,19 @@ async function main() {
   const enSeguimiento = [...jr, ...sr, ...act];
   const docsSeguimiento = new Set(enSeguimiento.map(p => p.doc));
 
+  // Qué sesiones tiene CADA grupo, por fecha. Sirve para no inventarle a un
+  // grupo una sesión que nunca tuvo: la hoja de un grupo puede traer llena la
+  // fila de alguien que en esa fecha estaba en otro grupo, y al reubicar la fila
+  // por fase (grupoEnFecha) la actividad viajaría con su nombre de origen.
+  // Caso real (2026-07-29): Claudia Giraldo pasó de Senior a Junior el 27/07; la
+  // hoja Junior traía marcadas sus sesiones del 25/05, 01/06 y 06/07 —que son
+  // sesiones JUNIOR, los lunes— y al mandarlas a Senior, que esos días no tenía
+  // sesión, aparecieron tres "sesiones Senior" de una sola persona al 100%.
+  const sesionesPorGrupo = { Junior: new Set(), Senior: new Set(), 'Activación': new Set() };
+  for (const [lista, grupo] of [[jr, 'Junior'], [sr, 'Senior'], [act, 'Activación']]) {
+    for (const p of lista) for (const s of p.sesiones) if (s.fecha) sesionesPorGrupo[grupo].add(s.fecha);
+  }
+
   // Cohorte de Horizontes Senior, fijada por slug. NO usar status='active': la base
   // aloja varios programas (Círculos de Conocimiento) y "la cohorte activa más
   // reciente" ya no es la de Horizontes Senior.
@@ -280,16 +359,27 @@ async function main() {
     // ubicar en el tiempo: se quedan con el grupo de la hoja.
     const cfPrevio = existing?.custom_form_data || null;
     const grupoDe = (fecha) => (cfPrevio && grupoEnFecha(cfPrevio, fecha)) || p.grupo;
-    const push = (tipo, arr) => arr.forEach((a, i) => plan.attendanceRows.push({
-      cohort_id: cohortId, candidate_id: candidateId, grupo: grupoDe(a.fecha),
-      tipo, actividad: a.actividad, fecha: a.fecha, orden: a.num ?? i + 1,
-      // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
-      // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
-      // false hace que el día que llegue la fecha cuente como que faltaron todos
-      // y hunda los porcentajes. null = no registrado (ver src/lib/asistencia.js).
-      asistio: esFutura(a.fecha) ? null : a.asistio,
-      observacion: tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion || null) : (a.observacion || null),
-    }));
+    const push = (tipo, arr) => arr.forEach((a, i) => {
+      const grupo = grupoDe(a.fecha);
+      // Una sesión que se reubica en otro grupo solo cuenta si ESE grupo tuvo
+      // sesión ese día. Si no, la celda no le aplicaba a la persona (ver
+      // `sesionesPorGrupo`) y escribirla crearía una actividad fantasma.
+      // Los cafés son compartidos y los entregables no tienen fecha: no aplican.
+      if (tipo === 'sesion' && a.fecha && grupo !== p.grupo && !sesionesPorGrupo[grupo]?.has(a.fecha)) {
+        SESIONES_DESCARTADAS.push({ doc: p.doc, name: p.name, actividad: a.actividad, deHoja: p.grupo, aGrupo: grupo });
+        return;
+      }
+      plan.attendanceRows.push({
+        cohort_id: cohortId, candidate_id: candidateId, grupo,
+        tipo, actividad: a.actividad, fecha: a.fecha, orden: a.num ?? i + 1,
+        // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
+        // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
+        // false hace que el día que llegue la fecha cuente como que faltaron todos
+        // y hunda los porcentajes. null = no registrado (ver src/lib/asistencia.js).
+        asistio: esFutura(a.fecha) ? null : a.asistio,
+        observacion: tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion || null) : (a.observacion || null),
+      });
+    });
     push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
   }
 
@@ -347,6 +437,26 @@ async function main() {
   console.log(`  ❌ NUNCA elegidos (elegido:false, NO aparecen): ${noElegidos.length}`);
   noElegidos.forEach(x => console.log(`       • ${x.doc} ${x.name} (ruta_BD previa: ${x.grupoPrevio})`));
   console.log(`  Filas de asistencia a cargar:             ${plan.attendanceRows.length}`);
+
+  // Mapeo de las columnas de observaciones. Se imprime siempre: es la única
+  // forma de notar a tiempo que la matriz cambió de layout y que las excusas
+  // están cayendo en la actividad equivocada.
+  console.log(`\n  Excusas / observaciones — a qué actividad quedó cada columna:`);
+  for (const [k, v] of [...OBS_MAPEO].sort()) {
+    const [hoja, col] = k.split('|');
+    console.log(`       ${hoja.replace(/^Seguimiento progreso /, '')} · "${col}" → ${v.actividad}  (${v.n})`);
+  }
+  if (OBS_HUERFANAS.size) {
+    console.log(`  ⚠️  Columnas de observación que no se pudieron ubicar:`);
+    for (const [k, n] of OBS_HUERFANAS) console.log(`       ${k.replace('|', ' · ')}  (${n})`);
+  }
+
+  if (SESIONES_DESCARTADAS.length) {
+    console.log(`\n  Celdas de sesión descartadas (el grupo destino no tuvo sesión ese día): ${SESIONES_DESCARTADAS.length}`);
+    for (const s of SESIONES_DESCARTADAS) {
+      console.log(`       • ${s.name} · "${s.actividad}" de la hoja ${s.deHoja} → en esa fecha era ${s.aGrupo}`);
+    }
+  }
   if (plan.sinCandidato.length) {
     console.log(`  ⚠️  En hoja pero SIN candidato en BD:      ${plan.sinCandidato.length}`);
     plan.sinCandidato.forEach(p => console.log(`       • ${p.doc} ${p.name} ${p.email}`));

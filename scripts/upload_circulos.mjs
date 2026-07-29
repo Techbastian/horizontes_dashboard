@@ -42,7 +42,6 @@ const supabase = createClient(url, key);
 const clean = (v) => (v == null ? '' : String(v).replace(/\s+/g, ' ').trim());
 const normDoc = (d) => String(d ?? '').replace(/\D/g, '').replace(/^0+/, '');
 const lcMail = (e) => String(e ?? '').toLowerCase().trim();
-const localPart = (e) => lcMail(e).split('@')[0].replace(/[.\-_+]/g, '');
 const normPhone = (p) => String(p ?? '').replace(/\D/g, '').slice(-10);
 
 // Los fijos vienen del formulario como " +57 604 2502366". La base guarda los
