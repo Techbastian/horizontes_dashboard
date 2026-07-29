@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
 import { fasesDeMatricula, rutaActual } from '../lib/rutas';
+import { nombreActividad, etiquetaCorta } from '../lib/asistencia';
 import { exportarFormacion, filtrarPerfiles } from '../lib/exportar';
 import ExportExcelModal from '../components/ExportExcelModal';
 import InformeModal from '../components/InformeModal';
@@ -77,7 +78,7 @@ function AttendanceCells({ items, pct }) {
               : missed ? (isEntregable ? 'Pendiente' : 'No asistió')
               : 'Sin registro';
             return (
-              <span key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
+              <span key={i} title={`${nombreActividad(it)}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
                 style={{ width: 19, height: 19, borderRadius: 4, background: bg, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                 {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}
               </span>
@@ -163,9 +164,14 @@ function AttendanceBarChart({ title, items, kind }) {
         {items.map((s, i) => {
           const pending = s.occurred === false;
           const fecha = fechaCorta(s.fecha);
+          // En el eje solo caben unos pocos caracteres: los nombres largos del
+          // calendario ("Café de Conocimiento No. 3") se compactan a "C3", y de
+          // ahí se reexpanden a "Café 3" para que todas las barras se lean igual
+          // vengan del Excel ("Cafe 1") o del calendario.
+          const corta = etiquetaCorta(s);
           const label = kind === 'cafe'
-            ? (s.actividad.replace(/Caf[eé]\s*/i, 'Café ').trim() || `C${i + 1}`)
-            : (fecha || s.actividad.replace(/Sesi[oó]n\s*\d*/i, '').trim() || `S${i + 1}`);
+            ? (/^C\d+$/.test(corta) ? `Café ${corta.slice(1)}` : corta || `C${i + 1}`)
+            : fecha || corta || `S${i + 1}`;
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end', minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#475569' : progressColor(s.pct) }}>{pending ? '—' : `${s.pct}%`}</span>
@@ -461,7 +467,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 : `Hay ${sinCargar.length} actividades sin asistencia cargada`}
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              {sinCargar.map(s => `${s.actividad} (${fechaCorta(s.fecha) || 'sin fecha'})`).join(' · ')}
+              {sinCargar.map(s => `${nombreActividad(s)} (${fechaCorta(s.fecha) || 'sin fecha'})`).join(' · ')}
               {' '}— ya {sinCargar.length === 1 ? 'ocurrió' : 'ocurrieron'} pero no {sinCargar.length === 1 ? 'tiene' : 'tienen'} ningún
               registro, así que {sinCargar.length === 1 ? 'sigue' : 'siguen'} en gris y no {sinCargar.length === 1 ? 'cuenta' : 'cuentan'} en
               los porcentajes. Toma la asistencia desde Eventos o carga el formulario.

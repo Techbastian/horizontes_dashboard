@@ -19,6 +19,8 @@
 // este módulo no filtra por su cuenta.
 // ============================================================================
 
+import { nombreActividad } from './asistencia.js';
+
 // Excel no acepta estos caracteres en el nombre de una hoja, y corta a 31.
 const nombreHoja = (s) => String(s).replace(/[[\]:*?/\\]/g, '-').slice(0, 31);
 
@@ -131,12 +133,14 @@ function hojaAsistencia({ nombre, perfiles, asistencia, columnasExtra, contacto 
   // Junior y otra de Senior— se leerían como la misma.
   const grupos = new Set(cols.map((c) => c.grupo));
   const tituloCol = (c) => {
+    // El nombre legible, no el código con el que se guarda (Círculos: C-S01).
+    const titulo = nombreActividad(c);
     // Muchos nombres ya traen la fecha dentro ("Sesion 25/05"): no se repite.
     const dm = c.fecha ? `${c.fecha.slice(8, 10)}/${c.fecha.slice(5, 7)}` : '';
-    const fecha = dm && !String(c.actividad).includes(dm) ? ` ${dm}` : '';
+    const fecha = dm && !titulo.includes(dm) ? ` ${dm}` : '';
     const grupo = grupos.size > 1 ? ` [${c.grupo}]` : '';
     const pendiente = c.occurred === false ? ' (pendiente)' : '';
-    return `${c.actividad}${fecha}${grupo}${pendiente}`;
+    return `${titulo}${fecha}${grupo}${pendiente}`;
   };
 
   const columnas = [
@@ -253,7 +257,7 @@ function hojaDetalle({ perfiles, asistencia }) {
         p.ruta,
         it.grupo,
         it.tipo,
-        it.actividad,
+        nombreActividad(it),
         it.fecha || '',
         estadoAsistencia(it),
         it.observacion || '',

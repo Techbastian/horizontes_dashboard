@@ -64,13 +64,54 @@ export function actividadesDelCalendario(eventos = [], programa) {
       if (!mapa.has(k)) {
         mapa.set(k, {
           grupo, tipo, fecha,
-          etiqueta: e.codigo || e.nombre,
+          codigo: e.codigo || null,
+          nombre: e.nombre || null,
           eventoId: e.id,
         });
       }
     }
   }
   return mapa;
+}
+
+// El nombre del evento sin el prefijo del programa: "Círculos — Sesión 1" → "Sesión 1".
+// Solo se corta con raya o guion largo, que es como se separa el prefijo; un guion
+// normal puede ser parte del nombre ("Sesión 7 - Analítica").
+const sinPrefijo = (nombre) => String(nombre).replace(/^[^—–]{1,30}[—–]\s*/, '').trim() || String(nombre);
+
+// Cómo se llama la actividad EN PANTALLA. En Círculos la asistencia se guarda con
+// el código del evento como `actividad` (C-S01) para que el Excel y la captura
+// desde la app escriban la misma fila; ese código es la clave correcta pero no le
+// dice nada a quien lee el tablero. Cuando la actividad ES el código, se muestra
+// el nombre del evento; cuando tiene nombre propio —HS guarda "Sesion 25/05", y
+// los entregables no son eventos— manda ese nombre y nada cambia.
+// La clave sigue siendo `actividad`: esto es solo presentación.
+const etiquetaDe = (v) =>
+  v.codigo && v.nombre && v.actividad === v.codigo ? sinPrefijo(v.nombre) : v.actividad;
+
+// Fallback único para la UI y los exportes, para no repetir el `||` en cada vista.
+export const nombreActividad = (item) => (item && (item.etiqueta || item.actividad)) || '';
+
+const abreviar = (t) => String(t)
+  .replace(/Sesi[oó]n\s*/i, 'S')
+  .replace(/Caf[eé]\s*/i, 'C')
+  .replace(/Entregable\s*/i, 'E')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+// Etiqueta para los sitios donde solo caben dos o tres caracteres: los cuadritos
+// del perfil y el eje del gráfico por actividad. Los nombres del calendario son
+// descriptivos ("Café de Conocimiento No. 3", "Sesión 1 (apertura)") y ahí no
+// caben, así que se reducen a su número. Cuando la actividad tiene nombre propio
+// —HS guarda "Sesion 25/05"— se abrevia el nombre igual que siempre.
+export function etiquetaCorta(item) {
+  if (!item) return '';
+  const nombre = nombreActividad(item);
+  if (nombre === item.actividad) return abreviar(nombre);
+  const m = nombre.match(/(sesi[oó]n|caf[eé]|entregable)\D{0,25}?(\d+)/i);
+  // Un nombre del que no se puede sacar número (HS: "Storytelling con datos")
+  // cae al código del evento, que es corto por construcción.
+  return m ? `${m[1][0].toUpperCase()}${m[2]}` : abreviar(item.actividad);
 }
 
 // Primera fecha con registro de cada grupo. Sirve de corte: el calendario no debe
@@ -99,7 +140,7 @@ function inventarioActividades(filas, esperadas) {
     // Un grupo sin ningún registro (programa nuevo) no tiene corte: se espera todo.
     const desde = inicio.get(a.grupo);
     if (desde && a.fecha && a.fecha < desde) continue;
-    inv.set(k, { ...a, actividad: a.etiqueta, anyAttended: false, anyRegistrado: false, orden: null });
+    inv.set(k, { ...a, actividad: a.codigo || a.nombre, anyAttended: false, anyRegistrado: false, orden: null });
   }
 
   for (const r of filas) {
@@ -108,7 +149,7 @@ function inventarioActividades(filas, esperadas) {
       // Sin evento en el calendario (p. ej. los entregables): la fila manda.
       inv.set(k, {
         grupo: r.grupo, tipo: r.tipo, fecha: r.fecha, actividad: r.actividad,
-        etiqueta: r.actividad, eventoId: null,
+        codigo: null, nombre: null, eventoId: null,
         anyAttended: false, anyRegistrado: false, orden: r.orden ?? null,
       });
     }
@@ -119,6 +160,8 @@ function inventarioActividades(filas, esperadas) {
     if (r.asistio === true) v.anyAttended = true;
     if (r.asistio !== null) v.anyRegistrado = true;
   }
+  // Se calcula al final, cuando `actividad` ya quedó fijada por las filas.
+  for (const v of inv.values()) v.etiqueta = etiquetaDe(v);
   return inv;
 }
 
@@ -270,6 +313,8 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
           grupo: a.grupo,
           tipo: a.tipo,
           actividad: a.actividad,
+          // Cómo mostrarla; `actividad` sigue siendo la clave contra la base.
+          etiqueta: a.etiqueta,
           fecha: a.fecha,
           orden: a.orden,
           // Sin fila = nunca se le registró nada a esta persona en esa actividad.
@@ -327,6 +372,7 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
           }
           return {
             actividad: a.actividad,
+            etiqueta: a.etiqueta,
             fecha: a.fecha,
             orden: a.orden,
             asistieron,

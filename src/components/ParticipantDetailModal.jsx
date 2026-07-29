@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GRUPO_CLASS } from '../lib/eventos';
 import { cambiarDeRuta, fasesDeMatricula } from '../lib/rutas';
 import { CATEGORIAS_RETIRO, CANALES_RIESGO } from '../lib/retiros';
+import { nombreActividad, etiquetaCorta } from '../lib/asistencia';
 
 function progressColor(pct) {
   if (pct >= 75) return '#10b981';
@@ -94,9 +95,10 @@ function Dots({ items, labelPrefix }) {
           : attended ? (isEntregable ? 'Entregado' : 'Asistió')
           : missed ? (isEntregable ? 'Pendiente' : 'No asistió')
           : 'Sin registro';
-        const short = it.actividad.replace(/Sesi[oó]n\s*/i, 'S').replace(/Caf[eé]\s*/i, 'C').replace(/Entregable\s*/i, 'E').replace(/\s+/g, ' ').trim();
+        const nombre = nombreActividad(it);
+        const short = etiquetaCorta(it);
         return (
-          <div key={i} title={`${it.actividad}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
+          <div key={i} title={`${nombre}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
               {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}
@@ -400,7 +402,7 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {obsList.map((s, i) => (
                             <div key={i} style={{ fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
-                              📝 {s.actividad} — observación: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{s.observacion}</span>
+                              📝 {nombreActividad(s)} — observación: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{s.observacion}</span>
                             </div>
                           ))}
                         </div>
@@ -418,7 +420,7 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                           {motivos.map((c, i) => (
                             <div key={i} style={{ fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
-                              📝 {c.actividad} — motivo de inasistencia: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{c.observacion}</span>
+                              📝 {nombreActividad(c)} — motivo de inasistencia: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{c.observacion}</span>
                             </div>
                           ))}
                         </div>

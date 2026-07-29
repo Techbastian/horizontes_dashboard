@@ -4,6 +4,7 @@
 // Las SEIS categorías son vocabulario compartido con scripts/upload_retiros.mjs,
 // que las clasifica desde la plantilla de PQRS. RetirosPage agrupa por este
 // campo: una categoría inventada en un solo lado queda fuera de los gráficos.
+import { nombreActividad } from './asistencia.js';
 
 export const CATEGORIAS_RETIRO = [
   'Situación laboral',
@@ -61,7 +62,7 @@ export function contextoAsistencia(att) {
     medidas: items.length,
     asistio: items.filter((i) => i.asistio === true).length,
     faltasSeguidas,
-    ultimaExcusa: ultima ? { texto: ultima.observacion, actividad: ultima.actividad, fecha: ultima.fecha } : null,
+    ultimaExcusa: ultima ? { texto: ultima.observacion, actividad: nombreActividad(ultima), fecha: ultima.fecha } : null,
     ultimaActividad: items[items.length - 1] || null,
   };
 }
@@ -71,7 +72,7 @@ export function excusasDe(att) {
   return [...(att?.sesiones || []), ...(att?.cafes || []), ...(att?.entregables || [])]
     .filter((i) => i.observacion && String(i.observacion).trim())
     .map((i) => ({
-      actividad: i.actividad,
+      actividad: nombreActividad(i),
       fecha: i.fecha,
       grupo: i.grupo,
       tipo: i.tipo,

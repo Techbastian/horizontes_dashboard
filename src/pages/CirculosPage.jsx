@@ -5,6 +5,7 @@ import KPICard from '../components/KPICard';
 import HorizontalBarChart from '../components/HorizontalBarChart';
 import ExportExcelModal from '../components/ExportExcelModal';
 import { exportarCirculos, filtrarParticipantes } from '../lib/exportar';
+import { nombreActividad } from '../lib/asistencia';
 
 const COLOR_MUJERES = '#ec4899';
 const COLOR_HOMBRES = '#3b82f6';
@@ -294,7 +295,7 @@ export default function CirculosPage({ circulos }) {
               {asistenciaSinCargar.length === 1 ? 'Hay una sesión sin asistencia cargada' : `Hay ${asistenciaSinCargar.length} sesiones sin asistencia cargada`}
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              {asistenciaSinCargar.map((s) => `${s.actividad} (${ddmm(s.fecha)})`).join(' · ')} — ya
+              {asistenciaSinCargar.map((s) => `${nombreActividad(s)} (${ddmm(s.fecha)})`).join(' · ')} — ya
               {asistenciaSinCargar.length === 1 ? ' ocurrió' : ' ocurrieron'} pero no hay ningún registro, así que no
               {asistenciaSinCargar.length === 1 ? ' cuenta' : ' cuentan'} en los porcentajes. Tómala desde Eventos o carga el formulario.
             </div>

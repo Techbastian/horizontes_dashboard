@@ -1,4 +1,5 @@
 import { SeccionInforme, CifrasInforme, TablaInforme, BarraInforme } from './InformeModal';
+import { nombreActividad } from '../lib/asistencia';
 
 // Informe de asistencia de un programa: promedios por grupo, cómo fue cada
 // actividad y el detalle persona por persona. Recibe exactamente los mismos
@@ -39,7 +40,7 @@ export default function InformeAsistencia({
         { titulo: '% de asistencia', alinear: 'left' },
       ]}
       filas={(items || []).map((s) => [
-        s.actividad,
+        nombreActividad(s),
         ddmm(s.fecha),
         s.occurred ? `${s.asistieron} de ${s.total}` : 'Pendiente',
         s.occurred ? (
@@ -164,7 +165,7 @@ export default function InformeAsistencia({
         >
           <TablaInforme
             columnas={[{ titulo: 'Actividad' }, { titulo: 'Grupo', alinear: 'center' }, { titulo: 'Fecha', alinear: 'center' }]}
-            filas={sinCargar.map((s) => [s.actividad, s.grupo, ddmm(s.fecha)])}
+            filas={sinCargar.map((s) => [nombreActividad(s), s.grupo, ddmm(s.fecha)])}
           />
         </SeccionInforme>
       )}

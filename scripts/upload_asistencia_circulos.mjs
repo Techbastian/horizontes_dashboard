@@ -30,10 +30,11 @@ const COMMIT = process.argv.includes('--commit');
 const COHORT_ID = '386dcf50-e269-4b5b-b248-aaa754dbd0aa'; // Círculos de Conocimiento I
 const GRUPO = 'Círculos'; // grupo único: los 263 no están subdivididos
 
-// TODAS las sesiones del programa, no solo las que ya tienen formulario: las
-// futuras necesitan sus filas creadas (con asistio=null) para que el dashboard
-// sepa que existen y las pinte en gris. Sin fila, la sesión es invisible —
-// "1 de 1 realizadas" en vez de "1 de 5". Es el mismo mecanismo de HS.
+// Van TODAS las sesiones del programa, pero de las que aún no tienen formulario
+// no se escribe ninguna fila: qué sesiones existen lo define el CALENDARIO, así
+// que basta con que el evento esté cargado (upload_eventos_circulos.mjs) para
+// que el dashboard las pinte en gris. Listarlas aquí sirve para ver el estado de
+// cada una en el resumen y para saber dónde va el próximo archivo.
 //
 // `actividad` debe coincidir con el `codigo` del evento para que la app edite la
 // misma fila al tomar asistencia desde el calendario, en vez de crear una nueva.
@@ -150,23 +151,12 @@ async function main() {
     console.log(`\n  ── ${sesion.actividad} · ${sesion.fecha} ${etiquetaEvento}`);
 
     if (!sesion.archivo) {
-      // Sesión sin formulario: solo marcador de posición para las filas que falten.
-      const nuevas = enrs.filter((e) => !existentes.has(`${sesion.actividad}|${e.candidate_id}`));
-      console.log(`     sin formulario todavía · filas a crear: ${nuevas.length} · ya existentes: ${enrs.length - nuevas.length}`);
-      for (const e of nuevas) {
-        filasAEscribir.push({
-          cohort_id: COHORT_ID,
-          candidate_id: e.candidate_id,
-          grupo: GRUPO,
-          tipo: 'sesion',
-          actividad: sesion.actividad,
-          fecha: sesion.fecha,
-          orden: null,
-          asistio: null, // null = no registrado; la fecha futura la pinta en gris
-          observacion: null,
-          evento_id: evento?.id ?? null,
-        });
-      }
+      // Sin formulario no hay nada que escribir. NO se crean filas de relleno: la
+      // sesión ya existe para el dashboard porque está en el calendario, y una
+      // fila con asistio=null no aporta ningún dato (ver la regla de
+      // "ocurridas vs pendientes" en CLAUDE.md). Llegó a haber 1.052 filas así.
+      const previas = enrs.filter((e) => existentes.has(`${sesion.actividad}|${e.candidate_id}`)).length;
+      console.log(`     sin formulario todavía · no se escribe nada${previas ? ` · ${previas} filas ya existen` : ''}`);
       continue;
     }
 
