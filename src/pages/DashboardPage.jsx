@@ -136,35 +136,41 @@ export default function DashboardPage({ metrics, applications, formationProgress
               <div className="card-title">Distribución de Seleccionados</div>
               <div className="card-subtitle">
                 {metrics.seleccionados.totalActivos} activos de {metrics.seleccionados.totalElegidos} seleccionados
-                {metrics.seleccionados.totalInactivos > 0 ? ` · ${metrics.seleccionados.totalInactivos} inactivos` : ''}
               </div>
             </div>
             <button className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => navigate('/formacion')}>
               Ver formación →
             </button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 12 }}>
+          {/* Las tres rutas muestran solo sus activos; los inactivos van en una
+              tarjeta propia en vez de como nota al pie de cada ruta. Así las
+              cuatro cifras suman los seleccionados (44+67+0+28 = 139) y el
+              acumulado de inactivaciones se lee de un vistazo. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 12 }}>
             {[
-              { key: 'Senior', label: 'Ruta Senior', icon: '⭐', color: '#0d9488', bg: 'rgba(13,148,136,0.08)', bd: 'rgba(13,148,136,0.2)' },
-              { key: 'Junior', label: 'Ruta Junior', icon: '🌱', color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)' },
-              { key: 'Activación', label: 'Estrategia de Activación', icon: '⚡', color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)' },
-            ].map(g => {
-              const activos = metrics.seleccionados.activos[g.key] || 0;
-              const inactivos = metrics.seleccionados.inactivos[g.key] || 0;
-              return (
-                <div key={g.key} onClick={() => navigate('/formacion')}
-                  style={{ background: g.bg, border: `1px solid ${g.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.label}</div>
-                    <span style={{ fontSize: 20, opacity: 0.5 }}>{g.icon}</span>
-                  </div>
-                  <div style={{ fontSize: 42, fontWeight: 900, color: g.color, lineHeight: 1.1, marginTop: 6 }}>{activos}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                    activos{inactivos > 0 ? ` · ${inactivos} inactivos` : ''}
-                  </div>
+              { key: 'Senior', label: 'Ruta Senior', icon: '⭐', color: '#0d9488', bg: 'rgba(13,148,136,0.08)', bd: 'rgba(13,148,136,0.2)',
+                valor: metrics.seleccionados.activos.Senior || 0, sub: 'activos', destino: '/formacion' },
+              { key: 'Junior', label: 'Ruta Junior', icon: '🌱', color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)',
+                valor: metrics.seleccionados.activos.Junior || 0, sub: 'activos', destino: '/formacion' },
+              { key: 'Activación', label: 'Estrategia de Activación', icon: '⚡', color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)',
+                valor: metrics.seleccionados.activos['Activación'] || 0, sub: 'activos', destino: '/formacion' },
+              // Acumulado del proyecto: toda persona seleccionada que hoy está
+              // inactiva, con o sin motivo registrado. Es el mismo universo que
+              // lista /retiros, así que la tarjeta lleva allá.
+              { key: 'Inactivados', label: 'Inactivados', icon: '✖', color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)',
+                valor: metrics.seleccionados.totalInactivos,
+                sub: metrics.seleccionados.totalInactivos > 0 ? inactivosSubtitle(metrics.seleccionados.inactivos) : 'sin inactivaciones', destino: '/retiros' },
+            ].map(g => (
+              <div key={g.key} onClick={() => navigate(g.destino)}
+                style={{ background: g.bg, border: `1px solid ${g.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.label}</div>
+                  <span style={{ fontSize: 20, opacity: 0.5 }}>{g.icon}</span>
                 </div>
-              );
-            })}
+                <div style={{ fontSize: 42, fontWeight: 900, color: g.color, lineHeight: 1.1, marginTop: 6 }}>{g.valor}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{g.sub}</div>
+              </div>
+            ))}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
             ⚡ La Estrategia de Activación es nivel Junior · Junior + Activación = <strong style={{ color: 'var(--text-secondary)' }}>{metrics.seleccionados.juniorMasActivacion}</strong> personas

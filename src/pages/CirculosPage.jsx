@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import KPICard from '../components/KPICard';
 import HorizontalBarChart from '../components/HorizontalBarChart';
@@ -26,16 +25,18 @@ function TooltipEdad({ active, payload, label }) {
   );
 }
 
-const GRUPO = 'Círculos'; // grupo único del programa
-
-const colorPct = (p) => (p == null ? '#94a3b8' : p >= 75 ? '#10b981' : p >= 40 ? '#f97316' : '#ef4444');
 const ddmm = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : '—');
 
+// Esta página es de CARACTERIZACIÓN: quiénes son los participantes. El
+// seguimiento de asistencia (cómo van, a quién llamar) vive solo en /formacion
+// — en Círculos no se hace un acompañamiento tan estricto como en Horizontes
+// Senior, así que duplicarlo aquí sobraba. Se sigue leyendo `attendanceByCandidate`
+// y `avancePlataforma` porque el export a Excel sí los incluye.
 export default function CirculosPage({ circulos }) {
   const {
     cohorte, metricas, loading, error,
     participantes = [], attendanceByCandidate = {}, avancePlataforma,
-    groupAttendance = {}, asistenciaSinCargar = [],
+    asistenciaSinCargar = [],
   } = circulos;
 
   // Hooks antes de cualquier return: durante la carga el componente sale
@@ -47,47 +48,6 @@ export default function CirculosPage({ circulos }) {
     (avancePlataforma?.participants || []).forEach((p) => { m[p.candidateId] = p; });
     return m;
   }, [avancePlataforma]);
-
-  // Seguimiento del programa: cómo va la asistencia y a quién hay que llamar.
-  // Se calcula sobre lo que ya devolvió el cálculo compartido de asistencia
-  // (solo actividades ocurridas y con registro), no sobre las filas crudas.
-  const seguimiento = useMemo(() => {
-    const sesiones = groupAttendance[GRUPO]?.sesiones || [];
-    const realizadas = sesiones.filter((s) => s.occurred);
-    const acumulado = realizadas.reduce(
-      (acc, s) => ({ a: acc.a + s.asistieron, t: acc.t + s.total }),
-      { a: 0, t: 0 }
-    );
-    const promedio = acumulado.t ? Math.round((acumulado.a / acumulado.t) * 100) : null;
-
-    const activos = participantes.filter((p) => p.activo);
-
-    // Alerta = dos o más faltas seguidas, o menos de la mitad de asistencia.
-    // Se miran solo las sesiones en las que a la persona SÍ se le midió: un
-    // `null` es "no se registró", no una falta, y no puede disparar una alerta.
-    const alertas = activos
-      .map((p) => {
-        const medidas = (attendanceByCandidate[p.candidateId]?.sesiones || [])
-          .filter((i) => i.occurred && i.asistio !== null);
-        let racha = 0;
-        for (let i = medidas.length - 1; i >= 0; i--) {
-          if (medidas[i].asistio === false) racha++;
-          else break;
-        }
-        const fue = medidas.filter((i) => i.asistio === true).length;
-        return {
-          ...p,
-          racha,
-          medidas: medidas.length,
-          fue,
-          pct: medidas.length ? Math.round((fue / medidas.length) * 100) : null,
-        };
-      })
-      .filter((x) => x.medidas > 0 && (x.racha >= 2 || (x.pct != null && x.pct < 50)))
-      .sort((a, b) => b.racha - a.racha || (a.pct ?? 100) - (b.pct ?? 100));
-
-    return { sesiones, realizadas, promedio, alertas, activos: activos.length };
-  }, [groupAttendance, participantes, attendanceByCandidate]);
 
   if (loading) {
     return (
@@ -212,81 +172,6 @@ export default function CirculosPage({ circulos }) {
         </div>
       )}
 
-      {/* ── Seguimiento del programa ───────────────────────────────────────
-          La caracterización dice QUIÉNES son; esto dice CÓMO VAN. Vive aquí y
-          no solo en /formacion para que la página de Círculos se lea sola. */}
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-header">
-          <div>
-            <div className="card-title">Seguimiento del programa</div>
-            <div className="card-subtitle">
-              {seguimiento.realizadas.length} de {seguimiento.sesiones.length} sesiones realizadas
-              {seguimiento.promedio != null && ` · ${seguimiento.promedio}% de asistencia acumulada`}
-              {' '}· el detalle persona por persona está en Formación.
-            </div>
-          </div>
-          <Link className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} to="/formacion">
-            Ver formación →
-          </Link>
-        </div>
-
-        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', marginTop: 8, marginBottom: 18 }}>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>Asistencia acumulada</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: colorPct(seguimiento.promedio) }}>
-              {seguimiento.promedio ?? '—'}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>Sesiones realizadas</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>
-              {seguimiento.realizadas.length}
-              <span style={{ fontSize: 16, color: '#475569', fontWeight: 600 }}>/{seguimiento.sesiones.length}</span>
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>Participantes activos</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a' }}>{seguimiento.activos}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#64748b' }}>Requieren seguimiento</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: seguimiento.alertas.length ? '#f59e0b' : '#10b981' }}>
-              {seguimiento.alertas.length}
-            </div>
-          </div>
-          {avancePlataforma && (
-            <div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Avance en plataforma</div>
-              <div style={{ fontSize: 30, fontWeight: 800, color: colorPct(avancePlataforma.globalAvg) }}>
-                {avancePlataforma.globalAvg}%
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Asistencia sesión a sesión. Las que aún no ocurren van en gris y no
-            entran en ningún promedio. */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, height: 150, paddingTop: 8 }}>
-          {seguimiento.sesiones.map((s, i) => (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end', minWidth: 0 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: s.occurred ? colorPct(s.pct) : '#94a3b8' }}>
-                {s.occurred ? `${s.pct}%` : '—'}
-              </span>
-              <div style={{ width: '100%', maxWidth: 54, background: '#e2e8f0', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: s.occurred ? `${s.pct}%` : '6px', background: s.occurred ? colorPct(s.pct) : '#cbd5e1', borderRadius: 6, transition: 'height 0.6s ease' }} />
-              </div>
-              <span style={{ fontSize: 11, color: '#475569', fontWeight: 600, whiteSpace: 'nowrap' }}>{ddmm(s.fecha)}</span>
-              <span style={{ fontSize: 9.5, color: '#64748b' }}>{s.occurred ? `${s.asistieron}/${s.total}` : 'Pendiente'}</span>
-            </div>
-          ))}
-          {!seguimiento.sesiones.length && (
-            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Todavía no hay sesiones en el calendario de Círculos.
-            </div>
-          )}
-        </div>
-      </div>
-
       {asistenciaSinCargar.length > 0 && (
         <div className="card" style={{ marginTop: 16, padding: '14px 18px', display: 'flex', gap: 12, alignItems: 'flex-start', borderLeft: '3px solid var(--accent-amber)' }}>
           <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
@@ -300,55 +185,6 @@ export default function CirculosPage({ circulos }) {
               {asistenciaSinCargar.length === 1 ? ' cuenta' : ' cuentan'} en los porcentajes. Tómala desde Eventos o carga el formulario.
             </div>
           </div>
-        </div>
-      )}
-
-      {seguimiento.alertas.length > 0 && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div className="card-header">
-            <div>
-              <div className="card-title">⚠️ Requieren seguimiento</div>
-              <div className="card-subtitle">
-                {seguimiento.alertas.length} personas activas con dos o más faltas seguidas, o menos de la mitad de asistencia.
-                Solo se cuentan las sesiones en las que sí se les registró.
-              </div>
-            </div>
-          </div>
-          <div className="table-container" style={{ marginTop: 8, overflowX: 'auto' }}>
-            <table className="data-table" style={{ width: '100%', borderSpacing: '10px 6px', minWidth: 620 }}>
-              <thead>
-                <tr>
-                  {['Participante', 'Faltas seguidas', 'Asistencia', 'Sesiones medidas'].map((h, i) => (
-                    <th key={h} style={{ textAlign: i === 0 ? 'left' : 'center', padding: '12px 14px', background: 'rgba(148,163,184,0.08)', fontSize: 12 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {seguimiento.alertas.slice(0, 20).map((a) => (
-                  <tr key={a.candidateId}>
-                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', borderRadius: 4 }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{a.nombre}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{a.email}</div>
-                    </td>
-                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                      <span style={{ fontWeight: 800, color: a.racha >= 2 ? '#ef4444' : '#64748b' }}>{a.racha}</span>
-                    </td>
-                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                      <span style={{ fontWeight: 800, color: colorPct(a.pct) }}>{a.pct}%</span>
-                    </td>
-                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4, fontSize: 13, color: 'var(--text-secondary)' }}>
-                      {a.fue} de {a.medidas}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {seguimiento.alertas.length > 20 && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
-              Se muestran las 20 más críticas de {seguimiento.alertas.length}. La lista completa sale en el Excel de Formación.
-            </div>
-          )}
         </div>
       )}
 
