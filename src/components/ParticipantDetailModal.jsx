@@ -333,7 +333,7 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                   <div style={{ fontSize: 12, color: '#64748b' }}>Motivo: {profile.motivoCambio}</div>
                 )}
                 {profile.completitud != null && (
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Completitud en nivelación: <b style={{ color: '#475569' }}>{profile.completitud}%</b></div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Completitud en formación en Platzi: <b style={{ color: '#475569' }}>{profile.completitud}%</b></div>
                 )}
               </div>
             </div>

@@ -61,8 +61,8 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
     <div className="animate-in">
       <div className="page-header" style={{ marginBottom: 20 }}>
         <div className="page-header-left">
-          <h1>Retención y Retiros</h1>
-          <p>Toda persona inactivada aparece aquí, con o sin motivo registrado, junto a las alertas de deserción.</p>
+          <h1>Retención y Deserción</h1>
+          <p>Toda persona que salió del programa aparece aquí, con o sin motivo registrado, junto a las alertas de deserción.</p>
         </div>
         <div className="page-header-actions">
           <button className="btn btn-secondary" onClick={() => setInformeOpen(true)}>📄 Informe PDF</button>
@@ -71,7 +71,7 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
 
       {informeOpen && (
         <InformeModal
-          titulo="Informe de retención y retiros"
+          titulo="Informe de retención y deserción"
           subtitulo="Horizontes Senior · motivos categorizados y alerta temprana"
           onClose={() => setInformeOpen(false)}
         >
@@ -81,20 +81,20 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
 
       {/* KPIs */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 24 }}>
-        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">🚪</span>Total Inactivos</div><div className="kpi-value">{total}</div><div className="kpi-change neutral">{total - sinClasificar} con motivo registrado</div></div>
+        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">🚪</span>Total Deserciones</div><div className="kpi-value">{total}</div><div className="kpi-change neutral">{total - sinClasificar} con motivo registrado</div></div>
         <div className="kpi-card" onClick={() => setSoloSinClasificar(v => !v)} style={{ cursor: sinClasificar ? 'pointer' : 'default', borderTop: soloSinClasificar ? '2px solid #f59e0b' : '2px solid transparent' }}>
           <div className="kpi-label"><span className="kpi-label-icon">❓</span>Sin Clasificar</div>
           <div className="kpi-value" style={{ color: sinClasificar ? '#f59e0b' : '#10b981' }}>{sinClasificar}</div>
           <div className="kpi-change neutral">{sinClasificar ? 'clic para filtrar' : 'todo clasificado'}</div>
         </div>
-        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">📉</span>Tasa de Retiro</div><div className="kpi-value">{tasa}%</div><div className="kpi-change neutral">de los seleccionados</div></div>
+        <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">📉</span>Tasa de Deserción</div><div className="kpi-value">{tasa}%</div><div className="kpi-change neutral">de los seleccionados</div></div>
         <div className="kpi-card"><div className="kpi-label"><span className="kpi-label-icon">⚠️</span>En Riesgo</div><div className="kpi-value" style={{ color: '#f59e0b' }}>{totalRiesgo}</div><div className="kpi-change neutral">deserción potencial</div></div>
       </div>
 
       {/* Distribución de motivos + por nivel */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, marginBottom: 24 }}>
         <div className="card">
-          <div className="card-header"><div><div className="card-title">Motivos de Retiro</div><div className="card-subtitle">Distribución por categoría</div></div></div>
+          <div className="card-header"><div><div className="card-title">Motivos de Deserción</div><div className="card-subtitle">Distribución por categoría</div></div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
             {catOrdenadas.map(([cat, n]) => (
               <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -110,7 +110,7 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
         </div>
 
         <div className="card">
-          <div className="card-header"><div><div className="card-title">Retiros por Nivel</div><div className="card-subtitle">Junior vs Senior</div></div></div>
+          <div className="card-header"><div><div className="card-title">Deserción por Nivel</div><div className="card-subtitle">Junior vs Senior</div></div></div>
           <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
             {['Junior', 'Senior'].map(n => (
               <div key={n} style={{ flex: 1, textAlign: 'center', background: `${nivelColor(n)}14`, border: `1px solid ${nivelColor(n)}33`, borderRadius: 12, padding: '20px 12px' }}>
@@ -126,7 +126,7 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
       <div className="card" style={{ marginBottom: 24 }}>
         <div className="card-header">
           <div>
-            <div className="card-title">Personas Inactivadas</div>
+            <div className="card-title">Personas que Desertaron</div>
             <div className="card-subtitle">
               {visibles.length} {soloSinClasificar ? 'sin clasificar' : 'personas'} · clic para ver el detalle
               {updateEnrollment ? ' y registrar el motivo' : ''}
@@ -166,7 +166,7 @@ export default function RetirosPage({ retiros, metrics, updateEnrollment }) {
                 </tr>
               ))}
               {visibles.length === 0 && (
-                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay personas inactivadas.</td></tr>
+                <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay deserciones registradas.</td></tr>
               )}
             </tbody>
           </table>
@@ -290,7 +290,7 @@ function DetalleRetiro({ caso, onClose, onGuardar }) {
 
           {caso.motivo && (
             <div className="modal-section">
-              <div className="modal-section-title">Motivo de retiro</div>
+              <div className="modal-section-title">Motivo de la deserción</div>
               <div style={{ background: 'var(--bg-card)', borderRadius: 10, padding: '14px 16px', fontSize: 14, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
                 {caso.motivo}
               </div>
@@ -327,7 +327,7 @@ function DetalleRetiro({ caso, onClose, onGuardar }) {
               </div>
               {caso.sinClasificar && (
                 <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                  Esta persona quedó inactiva sin motivo (viene marcada INACTIVO en la matriz).
+                  Esta persona salió del programa sin motivo registrado (viene marcada INACTIVO en la matriz).
                   Clasificarla la hace contar en los gráficos y en el informe.
                 </div>
               )}

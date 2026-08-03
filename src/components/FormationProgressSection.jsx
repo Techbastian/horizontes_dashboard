@@ -111,14 +111,14 @@ function ParticipantRow({ p, index, columnas, mostrarTrack }) {
 }
 
 // Los textos y la columna de ruta son parametrizables porque esta sección la
-// comparten Horizontes Senior (nivelación, rutas Jr/Sr) y Círculos de
-// Conocimiento (avance en plataforma, ruta única). Los valores por defecto son
-// los de Horizontes Senior, para no tocar su llamada.
+// comparten Horizontes Senior (formación en Platzi, rutas Jr/Sr) y Círculos de
+// Conocimiento (avance en Learning to Earning, ruta única). Los valores por
+// defecto son los de Horizontes Senior, para no tocar su llamada.
 export default function FormationProgressSection({
   formationProgress,
-  titulo = 'Nivelación — Progreso de Formación',
+  titulo = 'Ejecución de Formación en Platzi — Progreso',
   subtitulo = 'Avance individual por ruta. Hover sobre la barra para ver detalle por módulo.',
-  textoActivos = 'en proceso de nivelación',
+  textoActivos = 'en ejecución de formación en Platzi',
   mostrarTrack = true,
 }) {
   const [filter, setFilter] = useState('todos'); // todos | activos | inactivos

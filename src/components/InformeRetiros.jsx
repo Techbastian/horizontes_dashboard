@@ -36,19 +36,19 @@ export default function InformeRetiros({ retiros, metrics }) {
     <>
       <SeccionInforme
         titulo="Resumen"
-        descripcion={`Se cuenta toda persona inactivada, tenga o no un motivo escrito. La tasa se calcula sobre el total de personas seleccionadas para el programa.${
+        descripcion={`Se cuenta toda persona que salió del programa, tenga o no un motivo escrito. La tasa se calcula sobre el total de personas seleccionadas para el programa.${
           sinClasificar ? ` ${sinClasificar} de los ${total} casos siguen sin motivo registrado.` : ''
         }`}
       >
         <CifrasInforme
           items={[
-            { valor: total, label: 'Personas inactivadas', detalle: `${total - sinClasificar} con motivo registrado` },
-            { valor: `${tasa}%`, label: 'Tasa de retiro', detalle: `sobre ${totalSeleccionados} seleccionados` },
+            { valor: total, label: 'Personas que desertaron', detalle: `${total - sinClasificar} con motivo registrado` },
+            { valor: `${tasa}%`, label: 'Tasa de deserción', detalle: `sobre ${totalSeleccionados} seleccionados` },
             { valor: totalRiesgo, label: 'En riesgo', detalle: 'deserción potencial' },
             {
               valor: `${porNivel.Junior || 0} · ${porNivel.Senior || 0}`,
               label: 'Junior · Senior',
-              detalle: 'retiros por ruta',
+              detalle: 'deserción por ruta',
             },
           ]}
         />
@@ -71,13 +71,13 @@ export default function InformeRetiros({ retiros, metrics }) {
               etiqueta={`${Math.round((n / total) * 100)}%`}
             />,
           ])}
-          vacio="No hay retiros registrados."
+          vacio="No hay deserciones registradas."
         />
       </SeccionInforme>
 
       <SeccionInforme
         cortar
-        titulo="Personas inactivadas"
+        titulo="Personas que desertaron"
         descripcion={`${casos.length} personas. Cuando no hay motivo escrito se muestra la última excusa que dejó en una actividad, y la asistencia da el contexto.`}
       >
         <TablaInforme

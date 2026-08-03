@@ -586,6 +586,10 @@ export function useApplicationsData() {
     // Distribución de seleccionados (elegidos) por ruta y estado
     const selActivos = { Senior: 0, Junior: 0, 'Activación': 0 };
     const selInactivos = { Senior: 0, Junior: 0, 'Activación': 0 };
+    // Acumulado de la Estrategia de Activación: cuántas personas pasaron por ella
+    // ALGUNA VEZ. Es una cifra histórica, no un grupo de hoy — ver el comentario
+    // del bloque `activacion` más abajo.
+    const activacion = { total: 0, activos: 0, inactivos: 0, pct: 0 };
     let totalElegidos = 0;
     enrollments.forEach(e => {
       const cf = e.custom_form_data || {};
@@ -595,38 +599,65 @@ export function useApplicationsData() {
       const ruta = cf.ruta_asignada || 'Sin asignar';
       totalElegidos++;
       if (ruta in selActivos) (activo ? selActivos : selInactivos)[ruta]++;
+
+      // La Estrategia de Activación fue una fase de ARRANQUE, no un grupo
+      // permanente: sus 20 personas migraron a Junior el 23/07 y hoy nadie
+      // tiene `ruta_asignada = 'Activación'`. Por eso el acumulado se lee del
+      // HISTORIAL de fases y no de la ruta actual, que daría 0.
+      //
+      // `cambio_nivel` no basta como única señal: al inactivar a alguien se pisa
+      // con "Inactivo" y se perderían las 4 personas que pasaron por Activación
+      // y luego se retiraron. Se usa como respaldo para quien no tenga historial.
+      if (fasesDeMatricula(cf).some(f => f.ruta === 'Activación') || /activación/i.test(cambio)) {
+        activacion.total++;
+        if (activo) activacion.activos++; else activacion.inactivos++;
+      }
+
       if (!activo) {
         transiciones.inactivos++;
         transiciones.inactivosPorGrupo[ruta] = (transiciones.inactivosPorGrupo[ruta] || 0) + 1;
       } else {
         if (/Ascendió/i.test(cambio)) transiciones.ascensos++;
         else if (/Descendió/i.test(cambio)) transiciones.descensos++;
-        if (/activación/i.test(cambio)) transiciones.activacion++;
       }
     });
     transiciones.cambiaronNivel = transiciones.ascensos + transiciones.descensos;
+    // Las dos tarjetas que hablan de Activación leen el mismo acumulado, para que
+    // no muestren cifras distintas de lo mismo.
+    transiciones.activacion = activacion.total;
+    activacion.pct = totalElegidos ? Math.round((activacion.total / totalElegidos) * 100) : 0;
 
+    const totalInactivos = selInactivos.Senior + selInactivos.Junior + selInactivos['Activación'];
     const seleccionados = {
       activos: selActivos,
       inactivos: selInactivos,
       totalActivos: selActivos.Senior + selActivos.Junior + selActivos['Activación'],
-      totalInactivos: selInactivos.Senior + selInactivos.Junior + selInactivos['Activación'],
+      totalInactivos,
       totalElegidos,
-      juniorMasActivacion: selActivos.Junior + selActivos['Activación'], // Activación es nivel Junior
+      // Tasa de deserción: sobre el total de seleccionados, que es el universo
+      // que pudo desertar. Es el porcentaje que va en la tarjeta de deserción.
+      pctDesercion: totalElegidos ? Math.round((totalInactivos / totalElegidos) * 100) : 0,
     };
 
     // Funnel: Postulados → Elegibles → distribución de seleccionados (Junior incl. Activación, Senior)
+    //
+    // Junior y Senior NO son pasos consecutivos: son las dos ramas en que se
+    // reparten los elegibles. Por eso las dos declaran `base` = elegibles y no
+    // se dejan medir contra la fila anterior, que es lo que hace el gráfico por
+    // defecto: así Senior salía como % de Junior, un número que no significa
+    // nada (y que empeoraba cuanto más creciera Junior).
     const funnelData = [
       { name: 'Postulados', value: total, color: '#7c3aed' },
       { name: 'Elegibles', value: elegibles.length, color: '#0d9488' },
-      { name: 'Junior', label: 'Junior (incl. Activación)', value: selActivos.Junior + selActivos['Activación'], color: '#7c3aed' },
-      { name: 'Senior', value: selActivos.Senior, color: '#0d9488' },
+      { name: 'Junior', label: 'Junior (incl. Activación)', value: selActivos.Junior + selActivos['Activación'], base: elegibles.length, color: '#7c3aed' },
+      { name: 'Senior', value: selActivos.Senior, base: elegibles.length, color: '#0d9488' },
     ];
 
     return {
       total,
       transiciones,
       seleccionados,
+      activacion,
       elegibles: elegibles.length,
       noElegibles: noElegibles.length,
       evaluados: evaluados.length,

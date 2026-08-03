@@ -40,7 +40,10 @@ export const GRUPO_CLASS = {
 export const TIPO_OPCIONES = [
   { value: 'sesion', label: 'Sesión' },
   { value: 'cafe', label: 'Café' },
-  { value: 'nivelacion', label: 'Nivelación' },
+  // El `value` sigue siendo 'nivelacion': está guardado en `eventos.tipo` de 13
+  // eventos y cambiarlo los dejaría sin tipo. Solo cambia la etiqueta visible,
+  // que es lo que el programa decidió dejar de llamar "nivelación".
+  { value: 'nivelacion', label: 'Formación en Platzi' },
   // Acompañamiento en grupo. Va junto a 'sesion' (no en su lugar): las mentorías
   // de Círculos son las sesiones 2 a 5 y llevan asistencia como cualquier sesión;
   // este tipo solo las identifica en el calendario.

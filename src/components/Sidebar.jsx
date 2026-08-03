@@ -70,7 +70,7 @@ export default function Sidebar({ isOpen, onClose }) {
             onClick={onClose}
           >
             <span className="nav-item-icon">🚪</span>
-            Retención y Retiros
+            Retención y Deserción
           </NavLink>
 
           <NavLink

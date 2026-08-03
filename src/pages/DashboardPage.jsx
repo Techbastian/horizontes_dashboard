@@ -142,27 +142,36 @@ export default function DashboardPage({ metrics, applications, formationProgress
               Ver formación →
             </button>
           </div>
-          {/* Las tres rutas muestran solo sus activos; los inactivos van en una
-              tarjeta propia en vez de como nota al pie de cada ruta. Así las
-              cuatro cifras suman los seleccionados (44+67+0+28 = 139) y el
-              acumulado de inactivaciones se lee de un vistazo. */}
+          {/* Las dos rutas y los inactivados son el estado de HOY y suman los
+              seleccionados (44+67+28 = 139). La tarjeta de Activación es de otra
+              naturaleza: es un ACUMULADO histórico y su gente ya está contada
+              dentro de Junior, así que va con borde punteado para que no se lea
+              como una cuarta bolsa que suma. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginTop: 12 }}>
             {[
               { key: 'Senior', label: 'Ruta Senior', icon: '⭐', color: '#0d9488', bg: 'rgba(13,148,136,0.08)', bd: 'rgba(13,148,136,0.2)',
                 valor: metrics.seleccionados.activos.Senior || 0, sub: 'activos', destino: '/formacion' },
               { key: 'Junior', label: 'Ruta Junior', icon: '🌱', color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)',
                 valor: metrics.seleccionados.activos.Junior || 0, sub: 'activos', destino: '/formacion' },
+              // Cuántas personas fueron elegidas EN SU MOMENTO para el plan de
+              // activación. Mostrar aquí los activos de hoy daba 0 desde que las
+              // 20 migraron a Junior, y la estrategia parecía no haber existido.
               { key: 'Activación', label: 'Estrategia de Activación', icon: '⚡', color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)',
-                valor: metrics.seleccionados.activos['Activación'] || 0, sub: 'activos', destino: '/formacion' },
+                valor: metrics.activacion?.total || 0,
+                sub: 'acumulado del proceso',
+                acumulado: true, destino: '/formacion' },
               // Acumulado del proyecto: toda persona seleccionada que hoy está
-              // inactiva, con o sin motivo registrado. Es el mismo universo que
-              // lista /retiros, así que la tarjeta lleva allá.
-              { key: 'Inactivados', label: 'Inactivados', icon: '✖', color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)',
+              // fuera, con o sin motivo registrado. Es el mismo universo que
+              // lista /retiros, así que la tarjeta lleva allá. El porcentaje va
+              // AQUÍ y no en la de Activación: es la tasa de deserción.
+              { key: 'Deserción', label: 'Deserción del Programa', icon: '✖', color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)',
                 valor: metrics.seleccionados.totalInactivos,
-                sub: metrics.seleccionados.totalInactivos > 0 ? inactivosSubtitle(metrics.seleccionados.inactivos) : 'sin inactivaciones', destino: '/retiros' },
+                sub: metrics.seleccionados.totalInactivos > 0
+                  ? `${metrics.seleccionados.pctDesercion}% de los seleccionados · ${inactivosSubtitle(metrics.seleccionados.inactivos)}`
+                  : 'sin deserciones', destino: '/retiros' },
             ].map(g => (
               <div key={g.key} onClick={() => navigate(g.destino)}
-                style={{ background: g.bg, border: `1px solid ${g.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
+                style={{ background: g.bg, border: `1px ${g.acumulado ? 'dashed' : 'solid'} ${g.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{g.label}</div>
                   <span style={{ fontSize: 20, opacity: 0.5 }}>{g.icon}</span>
@@ -173,7 +182,9 @@ export default function DashboardPage({ metrics, applications, formationProgress
             ))}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-            ⚡ La Estrategia de Activación es nivel Junior · Junior + Activación = <strong style={{ color: 'var(--text-secondary)' }}>{metrics.seleccionados.juniorMasActivacion}</strong> personas
+            ⚡ La Estrategia de Activación es nivel Junior y fue una fase de arranque, no un grupo permanente:
+            las <strong style={{ color: 'var(--text-secondary)' }}>{metrics.activacion?.total || 0}</strong> personas que pasaron por ella
+            ({metrics.activacion?.activos || 0} activas · {metrics.activacion?.inactivos || 0} inactivas) ya están contadas en las tarjetas de arriba.
           </div>
         </div>
       )}
@@ -184,7 +195,7 @@ export default function DashboardPage({ metrics, applications, formationProgress
           <div className="card-header">
             <div>
               <div className="card-title">Movimientos en el Proceso Formativo</div>
-              <div className="card-subtitle">Cambios de nivel e inactivaciones a lo largo de la nivelación</div>
+              <div className="card-subtitle">Cambios de nivel e inactivaciones a lo largo de la ejecución de formación en Platzi</div>
             </div>
             <button className="btn btn-secondary btn-sm" style={{ width: 'auto', padding: '6px 14px' }} onClick={() => navigate('/formacion')}>
               Ver detalle →
@@ -194,8 +205,11 @@ export default function DashboardPage({ metrics, applications, formationProgress
             {[
               { icon: '🔼', label: 'Ascendieron a Senior', sub: 'Junior → Senior', value: metrics.transiciones.ascensos, color: '#a78bfa', bg: 'rgba(124,58,237,0.08)', bd: 'rgba(124,58,237,0.2)' },
               { icon: '🔽', label: 'Descendieron a Junior', sub: 'Senior → Junior', value: metrics.transiciones.descensos, color: '#fbbf24', bg: 'rgba(245,158,11,0.08)', bd: 'rgba(245,158,11,0.2)' },
+              // Misma cifra que la tarjeta de arriba (metrics.activacion.total):
+              // el acumulado de quienes ingresaron por activación, no los que
+              // siguen ahí — hoy no queda nadie con esa ruta.
               { icon: '⚡', label: 'Estrategia de Activación', sub: 'Ingresaron por activación', value: metrics.transiciones.activacion, color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', bd: 'rgba(245,158,11,0.18)' },
-              { icon: '✖', label: 'Pasaron a Inactivos', sub: inactivosSubtitle(metrics.transiciones.inactivosPorGrupo), value: metrics.transiciones.inactivos, color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)' },
+              { icon: '✖', label: 'Desertaron del Programa', sub: `${metrics.seleccionados?.pctDesercion || 0}% de los seleccionados · ${inactivosSubtitle(metrics.transiciones.inactivosPorGrupo)}`, value: metrics.transiciones.inactivos, color: '#f87171', bg: 'rgba(244,63,94,0.07)', bd: 'rgba(244,63,94,0.2)' },
             ].map((c, i) => (
               <div key={i} onClick={() => navigate('/formacion')}
                 style={{ background: c.bg, border: `1px solid ${c.bd}`, borderRadius: 12, padding: '18px 20px', cursor: 'pointer' }}>
@@ -481,7 +495,7 @@ export default function DashboardPage({ metrics, applications, formationProgress
         </div>
       )}
 
-      {/* Progreso de Nivelación */}
+      {/* Progreso de la ejecución de formación en Platzi */}
       <FormationProgressSection formationProgress={formationProgress} />
 
       {/* Razones de No Elegibilidad + Donas: fila de 4 columnas */}

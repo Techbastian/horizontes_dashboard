@@ -1,4 +1,5 @@
 import { SeccionInforme, CifrasInforme, TablaInforme, BarraInforme } from './InformeModal';
+import { conTasas } from '../lib/funnel';
 
 // Informe ejecutivo del programa: el que se le presenta a la Fundación, Ruta N
 // y la Alcaldía. Toma las mismas métricas que pinta el Dashboard —no recalcula
@@ -64,22 +65,25 @@ export default function InformeEjecutivo({
 
       <SeccionInforme
         titulo="Embudo de selección"
-        descripcion={`Tasa de elegibilidad: ${metrics.tasaElegibilidad}% de las postulaciones. ${metrics.evaluados} personas evaluadas y ${metrics.entrevistados} entrevistadas.`}
+        descripcion={`Tasa de elegibilidad: ${metrics.tasaElegibilidad}% de las postulaciones. ${metrics.evaluados} personas evaluadas y ${metrics.entrevistados} entrevistadas. Cada porcentaje se lee sobre su propia base: los elegibles sobre las postulaciones, y las rutas Junior y Senior sobre los elegibles —son dos ramas del mismo grupo, no pasos consecutivos—. La barra sí es proporcional al total.`}
       >
+        {/* Las tasas salen de src/lib/funnel.js, el mismo cálculo que pinta el
+            embudo en pantalla: antes el informe dividía todo entre el total y
+            las dos cifras del mismo paso no coincidían. */}
         <TablaInforme
           columnas={[
             { titulo: 'Etapa', ancho: '28%' },
             { titulo: 'Personas', alinear: 'center', ancho: '12%' },
-            { titulo: 'Proporción sobre el total', alinear: 'left' },
+            { titulo: 'Conversión', alinear: 'left' },
           ]}
-          filas={(metrics.funnelData || []).map((f) => [
+          filas={conTasas(metrics.funnelData || []).map((f) => [
             f.label || f.name,
             f.value,
             <BarraInforme
               valor={f.value}
               max={metrics.total || 1}
               color={f.color}
-              etiqueta={`${Math.round((f.value / (metrics.total || 1)) * 100)}%`}
+              etiqueta={`${f.tasa}%`}
             />,
           ])}
         />
@@ -100,6 +104,17 @@ export default function InformeEjecutivo({
             (sel.activos?.[g] || 0) + (sel.inactivos?.[g] || 0),
           ])}
         />
+        {/* La tabla es por ruta ACTUAL, así que Activación desaparece de ella
+            desde que sus personas pasaron a Junior. La nota conserva el dato,
+            igual que la tarjeta del dashboard. */}
+        {metrics.activacion?.total > 0 && (
+          <p className="informe-nota" style={{ marginTop: 10 }}>
+            Estrategia de Activación: {metrics.activacion.total} personas ({metrics.activacion.pct}% de las seleccionadas) fueron
+            elegidas para el plan de activación, una fase de arranque en nivel Junior. Hoy todas figuran en la ruta Junior
+            ({metrics.activacion.activos} activas y {metrics.activacion.inactivos} inactivas), por lo que ya están contadas en la
+            tabla anterior.
+          </p>
+        )}
       </SeccionInforme>
 
       <SeccionInforme

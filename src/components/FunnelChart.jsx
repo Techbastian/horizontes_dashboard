@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom';
+import { conTasas } from '../lib/funnel';
 
 export default function FunnelChart({ data }) {
   const navigate = useNavigate();
 
   if (!data || !data.length) return null;
 
-  const maxValue = data[0].value;
+  // La tasa de cada paso se deriva en src/lib/funnel.js, compartida con el
+  // informe en PDF para que los dos digan lo mismo.
+  const pasos = conTasas(data);
+  const maxValue = pasos[0].value;
 
   const handleStepClick = (name) => {
     switch(name) {
@@ -28,11 +32,8 @@ export default function FunnelChart({ data }) {
 
   return (
     <div className="funnel-container">
-      {data.map((step, i) => {
+      {pasos.map((step, i) => {
         const pct = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
-        const rate = i > 0 && data[i - 1].value > 0
-          ? ((step.value / data[i - 1].value) * 100).toFixed(0)
-          : '100';
 
         return (
           <div 
@@ -52,10 +53,10 @@ export default function FunnelChart({ data }) {
                 style={{
                   width: `${Math.max(pct, 12)}%`, // Ensure visibility even for extreme small % 
                   background: step.color,
-                  zIndex: data.length - i, 
+                  zIndex: pasos.length - i,
                 }}
               >
-                <span className="funnel-rate">{rate}%</span>
+                <span className="funnel-rate">{step.tasa}%</span>
               </div>
             </div>
           </div>
