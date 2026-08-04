@@ -69,7 +69,10 @@ export function contextoAsistencia(att) {
 
 /** Todas las excusas registradas de una persona, en orden cronológico. */
 export function excusasDe(att) {
-  return [...(att?.sesiones || []), ...(att?.cafes || []), ...(att?.entregables || [])]
+  // Aquí sí entran las mentorías: una excusa vale lo mismo venga de donde venga.
+  // En `contextoAsistencia` no, porque las faltas seguidas son señal de riesgo
+  // sobre lo obligatorio y la mentoría es acompañamiento.
+  return [...(att?.sesiones || []), ...(att?.cafes || []), ...(att?.mentorias || []), ...(att?.entregables || [])]
     .filter((i) => i.observacion && String(i.observacion).trim())
     .map((i) => ({
       actividad: nombreActividad(i),

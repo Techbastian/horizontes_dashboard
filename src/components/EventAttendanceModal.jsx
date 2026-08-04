@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { isoToBogotaDate } from '../lib/bogotaTime';
-import { GRUPO_CLASS, attendanceTipo, gruposDeAsistencia, tipoLabel } from '../lib/eventos';
+import {
+  GRUPO_CLASS,
+  attendanceTipo,
+  gruposDeAsistencia,
+  soloActivosEnAsistencia,
+  tipoLabel,
+} from '../lib/eventos';
 import { rutaActual } from '../lib/rutas';
 import { yaPaso } from '../lib/asistencia';
 
@@ -23,6 +29,9 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
 
   // participantes: { [grupo]: [{ candidate_id, nombre }] }
   const [participantes, setParticipantes] = useState({});
+  // Cuántos quedaron fuera del listado por estar inactivos, para avisarlo en vez
+  // de que la lista aparezca corta sin explicación.
+  const [ocultosInactivos, setOcultosInactivos] = useState(0);
   // marcas: Map keyOf → { asistio, observacion }
   const [marks, setMarks] = useState({});
   // actividad existente por (grupo,candidate) para editar la fila correcta
@@ -37,11 +46,16 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
         // 1) Participantes por grupo (elegidos).
         const { data: enrs, error: eErr } = await supabase
           .from('program_enrollments')
-          .select('candidate_id, custom_form_data')
+          .select('candidate_id, status, custom_form_data')
           .eq('cohort_id', cohortId);
         if (eErr) throw eErr;
 
+        // Solo los que siguen en el programa. En Círculos esta bandera significa
+        // otra cosa y no se filtra — ver `soloActivosEnAsistencia`.
+        const soloActivos = soloActivosEnAsistencia(programa);
+
         const porGrupo = {};
+        let ocultos = 0;
         for (const g of grupos) porGrupo[g] = [];
         for (const e of enrs || []) {
           const d = e.custom_form_data || {};
@@ -52,6 +66,12 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
           // le haya escrito las fases.
           const g = rutaActual(d);
           if (!porGrupo[g]) continue;
+          // Se cuenta después de filtrar por grupo: el aviso habla de este evento,
+          // no de todo el programa. Mismo criterio que /formacion (FormationPage).
+          if (soloActivos && (d.estado_activo === false || e.status === 'inactive')) {
+            ocultos++;
+            continue;
+          }
           porGrupo[g].push({ candidate_id: e.candidate_id, nombre: d.nombre_completo || '(sin nombre)' });
         }
         for (const g of grupos) porGrupo[g].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
@@ -83,6 +103,7 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
           setParticipantes(porGrupo);
           setMarks(nextMarks);
           setActividadPrev(prevAct);
+          setOcultosInactivos(ocultos);
         }
       } catch (err) {
         if (!cancel) setError(err.message || 'No se pudo cargar la asistencia.');
@@ -93,7 +114,7 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
     return () => {
       cancel = true;
     };
-  }, [cohortId, attTipo, fecha, grupos]);
+  }, [cohortId, programa, attTipo, fecha, grupos]);
 
   const lista = participantes[activeGrupo] || [];
   // El contador siempre va sobre el grupo completo (es el dato que importa);
@@ -178,8 +199,8 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
           </div>
           <div className="modal-body">
             <p style={{ color: 'var(--text-secondary)' }}>
-              Este evento ({event.nombre}) no es una sesión ni un café, así que no lleva registro de
-              asistencia.
+              Este evento ({event.nombre}) no es una sesión, un café ni una mentoría, así que no
+              lleva registro de asistencia.
             </p>
           </div>
         </div>
@@ -253,6 +274,18 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
               Esta actividad todavía no ocurre. Si guardas ahora, todos los que no queden marcados
               se registran como <strong>ausentes</strong>.
             </div>
+          )}
+
+          {/* La lista solo trae a quien sigue activo. Se dice, para que una lista
+              más corta de lo esperado no se lea como un dato faltante. Lo ya
+              registrado de esas personas no se toca: el guardado solo escribe
+              las filas de quienes aparecen aquí. */}
+          {!loading && ocultosInactivos > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px' }}>
+              No se listan <strong>{ocultosInactivos}</strong>{' '}
+              {ocultosInactivos === 1 ? 'participante inactivo' : 'participantes inactivos'}. Su
+              asistencia anterior se conserva.
+            </p>
           )}
 
           {loading ? (

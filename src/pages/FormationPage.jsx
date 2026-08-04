@@ -500,6 +500,15 @@ export default function FormationPage({ enrollments = [], formationProgress, att
           {cfg.columnasExtra && (
             <AttendanceBarChart title="Asistencia a cafés de conocimiento" items={datos.groupAttendance[activeTab]?.cafes} kind="cafe" />
           )}
+          {/* Solo cuando el grupo tenga mentorías: son acompañamiento, no las
+              tienen todos los grupos y su % no entra en el del programa. */}
+          {(datos.groupAttendance[activeTab]?.mentorias || []).length > 0 && (
+            <AttendanceBarChart
+              title="Asistencia a mentorías (no cuenta para el %)"
+              items={datos.groupAttendance[activeTab]?.mentorias}
+              kind="sesion"
+            />
+          )}
         </div>
       </div>
 

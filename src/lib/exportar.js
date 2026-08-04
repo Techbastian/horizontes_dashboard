@@ -92,10 +92,10 @@ function historialTexto(fases = []) {
     .join(' → ');
 }
 
-// Orden de columnas de actividad: primero sesiones, luego cafés, luego
+// Orden de columnas de actividad: primero sesiones, luego cafés, mentorías y
 // entregables; dentro de cada tipo por fecha (los entregables no tienen) y
 // `orden` de desempate, igual que en src/lib/asistencia.js.
-const PESO_TIPO = { sesion: 0, cafe: 1, entregable: 2 };
+const PESO_TIPO = { sesion: 0, cafe: 1, mentoria: 2, entregable: 3 };
 function ordenarActividades(a, b) {
   return (
     (PESO_TIPO[a.tipo] ?? 9) - (PESO_TIPO[b.tipo] ?? 9) ||
@@ -110,6 +110,7 @@ const claveActividad = (i) => `${i.grupo}|${i.tipo}|${i.actividad}|${i.fecha || 
 const itemsDe = (att) => [
   ...(att?.sesiones || []),
   ...(att?.cafes || []),
+  ...(att?.mentorias || []),
   ...(att?.entregables || []),
 ];
 

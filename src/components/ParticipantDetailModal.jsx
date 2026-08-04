@@ -369,7 +369,7 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
           )}
 
           {/* Asistencia sesión por sesión */}
-          {attendance && (attendance.sesiones?.length || attendance.cafes?.length || attendance.entregables?.length) ? (
+          {attendance && (attendance.sesiones?.length || attendance.cafes?.length || attendance.mentorias?.length || attendance.entregables?.length) ? (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
@@ -421,6 +421,32 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                           {motivos.map((c, i) => (
                             <div key={i} style={{ fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
                               📝 {nombreActividad(c)} — motivo de inasistencia: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{c.observacion}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+                {/* Las mentorías se registran igual que una sesión, pero son
+                    acompañamiento y no formación: su % se muestra aparte y NO
+                    entra en el total ponderado de arriba. */}
+                {attendance.mentorias?.length > 0 && (() => {
+                  const obsList = attendance.mentorias.filter(m => m.observacion);
+                  return (
+                    <div>
+                      <div style={{ fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                        Mentorías{' '}
+                        <span style={{ color: '#64748b' }}>
+                          ({attendance.pctMentorias == null ? '—' : `${attendance.pctMentorias}%`} · no cuenta para el total)
+                        </span>
+                      </div>
+                      <AttendanceDots items={attendance.mentorias} labelPrefix="M" />
+                      {obsList.length > 0 && (
+                        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {obsList.map((m, i) => (
+                            <div key={i} style={{ fontSize: 12, color: '#fbbf24', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '8px 12px' }}>
+                              📝 {nombreActividad(m)} — observación: <span style={{ color: '#334155', whiteSpace: 'pre-wrap' }}>{m.observacion}</span>
                             </div>
                           ))}
                         </div>

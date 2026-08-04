@@ -18,6 +18,11 @@ import { attendanceTipo, gruposDeAsistencia } from './eventos.js';
 // Pesos del total ponderado (Horizontes Senior). Se renormalizan sobre los
 // componentes que ya tienen actividades ocurridas, así que en Círculos —que solo
 // tiene sesiones— el total termina siendo exactamente el % de sesiones.
+//
+// Las MENTORÍAS no están aquí a propósito: se les registra asistencia como a
+// una sesión, pero son acompañamiento y no formación, así que no pesan en el
+// porcentaje del programa (decisión del usuario, 2026-08-04). Basta con que
+// falten en este objeto — el bucket 'mentorias' nunca entra en `parts`.
 const PESOS = { sesiones: 0.35, cafes: 0.4, entregables: 0.25 };
 
 const clave = (grupo, tipo, fecha) => `${grupo}|${tipo}|${fecha ?? 'sin-fecha'}`;
@@ -77,7 +82,13 @@ export function actividadesDelCalendario(eventos = [], programa) {
 // El nombre del evento sin el prefijo del programa: "Círculos — Sesión 1" → "Sesión 1".
 // Solo se corta con raya o guion largo, que es como se separa el prefijo; un guion
 // normal puede ser parte del nombre ("Sesión 7 - Analítica").
-const sinPrefijo = (nombre) => String(nombre).replace(/^[^—–]{1,30}[—–]\s*/, '').trim() || String(nombre);
+//
+// El prefijo son una o dos palabras: el programa ("Círculos — Sesión 1") o el
+// módulo ("M4 — Conectar para Visualizar"). Ese límite es lo que salva a los
+// nombres donde la raya separa el sufijo y no el prefijo: "Mentoría de
+// seguimiento 1 — Junior" se quedaba en "Junior".
+const sinPrefijo = (nombre) =>
+  String(nombre).replace(/^(?:\S+\s+)?\S+\s*[—–]\s*/, '').trim() || String(nombre);
 
 // Cómo se llama la actividad EN PANTALLA. En Círculos la asistencia se guarda con
 // el código del evento como `actividad` (C-S01) para que el Excel y la captura
@@ -95,6 +106,7 @@ export const nombreActividad = (item) => (item && (item.etiqueta || item.activid
 const abreviar = (t) => String(t)
   .replace(/Sesi[oó]n\s*/i, 'S')
   .replace(/Caf[eé]\s*/i, 'C')
+  .replace(/Mentor[ií]a\s*/i, 'M')
   .replace(/Entregable\s*/i, 'E')
   .replace(/\s+/g, ' ')
   .trim();
@@ -108,7 +120,7 @@ export function etiquetaCorta(item) {
   if (!item) return '';
   const nombre = nombreActividad(item);
   if (nombre === item.actividad) return abreviar(nombre);
-  const m = nombre.match(/(sesi[oó]n|caf[eé]|entregable)\D{0,25}?(\d+)/i);
+  const m = nombre.match(/(sesi[oó]n|caf[eé]|mentor[ií]a|entregable)\D{0,25}?(\d+)/i);
   // Un nombre del que no se puede sacar número (HS: "Storytelling con datos")
   // cae al código del evento, que es corto por construcción.
   return m ? `${m[1][0].toUpperCase()}${m[2]}` : abreviar(item.actividad);
@@ -197,7 +209,11 @@ export function pctOcurridas(items) {
   return Math.round((occ.filter((i) => i.asistio === true).length / occ.length) * 100);
 }
 
-const bucketDe = (tipo) => (tipo === 'sesion' ? 'sesiones' : tipo === 'cafe' ? 'cafes' : 'entregables');
+// A qué lista va cada actividad. Explícito por tipo: cuando el default se
+// tragaba todo lo desconocido, un tipo nuevo caía en `entregables` y se colaba
+// en el 25% sin que nadie lo notara.
+const BUCKETS = { sesion: 'sesiones', cafe: 'cafes', mentoria: 'mentorias', entregable: 'entregables' };
+const bucketDe = (tipo) => BUCKETS[tipo] || 'entregables';
 
 // FASES: los grupos por los que ha pasado una persona, en orden cronológico.
 // Las filas de session_attendance son inmutables y conservan el grupo donde
@@ -267,7 +283,7 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
     const g = {
       grupo: fases.length ? fases[fases.length - 1].ruta : null,
       fases: [],
-      sesiones: [], cafes: [], entregables: [],
+      sesiones: [], cafes: [], mentorias: [], entregables: [],
     };
     // 1) Qué actividades reclama cada fase. Dos fases pueden compartir ruta (ida
     //    y vuelta Junior→Senior→Junior): cada actividad se cuenta una sola vez,
@@ -335,6 +351,9 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
     g.pctSesiones = pctOcurridas(g.sesiones);
     g.pctCafes = pctOcurridas(g.cafes);
     g.pctEntregables = pctOcurridas(g.entregables);
+    // Informativo: se muestra en el perfil, pero deliberadamente NO se suma al
+    // total ponderado (ver PESOS).
+    g.pctMentorias = pctOcurridas(g.mentorias);
 
     const parts = [];
     if (g.pctSesiones != null) parts.push([PESOS.sesiones, g.pctSesiones]);
@@ -381,7 +400,11 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
             pct: total ? Math.round((asistieron / total) * 100) : 0,
           };
         });
-    porGrupo[grupo] = { sesiones: construir('sesion'), cafes: construir('cafe') };
+    porGrupo[grupo] = {
+      sesiones: construir('sesion'),
+      cafes: construir('cafe'),
+      mentorias: construir('mentoria'),
+    };
   }
 
   // ── Actividades ya ocurridas sin un solo registro ─────────────────────────

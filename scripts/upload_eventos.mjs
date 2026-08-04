@@ -48,11 +48,13 @@ const ACTIVACION_FECHAS = ['2026-07-08', '2026-07-15', '2026-07-16', '2026-07-21
 // sacarlas de ahí. Van aquí con las fechas que confirma el usuario, igual que las
 // nivelaciones de Activación.
 //
-// Llevan tipo ['mentoria'] A SECAS, sin 'sesion': son acompañamiento y NO deben
-// entrar en el % de asistencia del programa (decisión del usuario, 2026-07-29).
-// Con eso `attendanceTipo` devuelve null, el dashboard no les crea actividad
-// esperada y no aparece el botón de tomar asistencia. Si alguna sí debiera
-// contar, se le agrega 'sesion' y el resto funciona solo.
+// Llevan tipo ['mentoria'] A SECAS, sin 'sesion'. Eso ya no significa "sin
+// asistencia": desde el 2026-08-04 `attendanceTipo` les da su propio tipo
+// 'mentoria', así que SÍ se les toma asistencia como a una sesión —el botón
+// aparece en el calendario— pero NO entran en el % de asistencia del programa,
+// porque son acompañamiento y no formación (decisión del usuario). Si alguna
+// debiera contar, se le agrega 'sesion' y pasa a pesar como tal; así están las
+// sesiones 2 a 5 de Círculos, que son mentorías pero son el programa mismo.
 const MENTORIAS = [
   { codigo: 'M-J01', grupo: 'Junior', fecha: '2026-07-29', inicio: '16:00', fin: '17:30' },
 ];
@@ -201,7 +203,7 @@ function buildEventos() {
       codigo: m.codigo,
       tipo: ['mentoria'],
       nombre: `Mentoría de seguimiento ${orden} — ${m.grupo}`,
-      descripcion: 'Acompañamiento de seguimiento (Fase 4). No cuenta para el porcentaje de asistencia del programa.',
+      descripcion: 'Acompañamiento de seguimiento (Fase 4). Se registra la asistencia, pero no cuenta para el porcentaje de asistencia del programa.',
       evidencia_url: null,
       fecha_hora_inicio: bogotaIso(m.fecha, m.inicio.split(':').map(Number)),
       fecha_hora_fin: bogotaIso(m.fecha, m.fin.split(':').map(Number)),
