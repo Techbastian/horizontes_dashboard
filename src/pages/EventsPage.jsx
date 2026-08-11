@@ -9,6 +9,7 @@ import {
 } from '../lib/bogotaTime';
 import EventEditorModal from '../components/EventEditorModal';
 import EventAttendanceModal from '../components/EventAttendanceModal';
+import TiposEventoModal from '../components/TiposEventoModal';
 import {
   gruposDe,
   GRUPO_CLASS,
@@ -119,6 +120,13 @@ export default function EventsPage({ cohort }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [attendanceEvent, setAttendanceEvent] = useState(null);
+  const [tiposOpen, setTiposOpen] = useState(false);
+  // El vocabulario de tipos no vive en el estado de React (es estado de módulo,
+  // compartido con los ETL), así que crear o editar uno no dispara por sí solo un
+  // repintado. Este contador no se lee: existe para provocarlo. Se hace así y no
+  // con un `key` porque remontar el editor le borraría al usuario lo que ya
+  // llevaba escrito en el evento.
+  const [, setTiposVersion] = useState(0);
 
   const calendarCells = useMemo(
     () => buildCalendarCells(viewYear, viewMonth0),
@@ -218,8 +226,8 @@ export default function EventsPage({ cohort }) {
             eventos (zona America/Bogota).
           </p>
         </div>
-        {cohortes.length > 1 && (
-          <div className="page-header-actions">
+        <div className="page-header-actions">
+          {cohortes.length > 1 && (
             <select
               className="filter-select"
               value={cohortId || ''}
@@ -235,8 +243,13 @@ export default function EventsPage({ cohort }) {
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+          {/* Los tipos son de toda la base, no de una cohorte: el botón va en la
+              cabecera de la página y no dentro del editor de un evento. */}
+          <button type="button" className="btn btn-secondary" onClick={() => setTiposOpen(true)}>
+            🏷️ Tipos de evento
+          </button>
+        </div>
       </div>
 
       <div className="events-calendar-wrap">
@@ -489,6 +502,14 @@ export default function EventsPage({ cohort }) {
           }}
           onSaved={() => loadEvents()}
           onDeleted={() => loadEvents()}
+          onGestionarTipos={() => setTiposOpen(true)}
+        />
+      )}
+
+      {tiposOpen && (
+        <TiposEventoModal
+          onClose={() => setTiposOpen(false)}
+          onSaved={() => setTiposVersion((v) => v + 1)}
         />
       )}
 

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
 import { fasesDeMatricula } from '../lib/rutas';
 import { PROGRAMA_CIRCULOS } from '../lib/eventos';
+import { cargarTiposEvento } from '../lib/tiposEvento';
 
 // Círculos de Conocimiento vive en su propia cohorte, fijada por slug (nunca por
 // status='active': la base aloja dos programas activos).
@@ -26,6 +27,11 @@ export function useCirculosData() {
     try {
       setLoading(true);
       setError(null);
+
+      // Igual que en useApplicationsData: los pesos y qué eventos llevan
+      // asistencia salen de aquí. La promesa está cacheada, así que si el hook de
+      // Horizontes ya la pidió, esto no dispara una segunda consulta.
+      await cargarTiposEvento();
 
       const { data: coh, error: cohErr } = await supabase
         .from('cohorts')

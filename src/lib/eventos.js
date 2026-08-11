@@ -57,48 +57,117 @@ export const GRUPO_CLASS = {
   Círculos: 'grp-circulos', // azul
 };
 
-// Vocabulario de tipos: actividades + comunicaciones. Un evento puede tener 1 o más.
-export const TIPO_OPCIONES = [
-  { value: 'sesion', label: 'Sesión' },
-  { value: 'cafe', label: 'Café' },
+// ── Vocabulario de tipos de evento ─────────────────────────────────────────
+//
+// La fuente de verdad es la tabla `tipos_evento` (scripts/migracion_tipos_evento.sql),
+// para poder dar de alta tipos nuevos desde el calendario sin tocar código. Lo de
+// abajo es el respaldo: es exactamente lo que la tabla trae de semilla, y es lo
+// que rige mientras la migración no se haya corrido y cuando estos módulos se
+// importan desde node (los ETL, que no siempre tienen por qué consultarla).
+//
+// Cada tipo declara:
+//   • tipoAsistencia — bajo qué clave se guarda en `session_attendance.tipo`.
+//     null = no se le toma asistencia. Varios tipos pueden compartir clave:
+//     'nivelacion' apunta a 'sesion' porque las nivelaciones de Activación se
+//     registraron y cuentan como sesiones.
+//   • peso — fracción del total ponderado. Solo cuenta en la fila canónica (la
+//     que cumple value === tipoAsistencia); null = se registra pero no pesa.
+//   • prioridad — con qué clave se queda un evento que trae varios tipos: gana
+//     la menor. De ahí que 'mentoria' vaya de última (ver `attendanceTipo`).
+const TIPOS_POR_DEFECTO = [
+  { value: 'sesion', label: 'Sesión', tipoAsistencia: 'sesion', peso: 0.35, prioridad: 20, orden: 10, enCalendario: true },
+  { value: 'cafe', label: 'Café', tipoAsistencia: 'cafe', peso: 0.4, prioridad: 10, orden: 20, enCalendario: true },
   // El `value` sigue siendo 'nivelacion': está guardado en `eventos.tipo` de 13
   // eventos y cambiarlo los dejaría sin tipo. Solo cambia la etiqueta visible,
   // que es lo que el programa decidió dejar de llamar "nivelación".
-  { value: 'nivelacion', label: 'Formación en Platzi' },
+  { value: 'nivelacion', label: 'Formación en Platzi', tipoAsistencia: 'sesion', peso: null, prioridad: 30, orden: 30, enCalendario: true },
   // Acompañamiento en grupo. Puede ir junto a 'sesion' o solo, y eso decide si
   // cuenta para el porcentaje del programa — ver `attendanceTipo`.
-  { value: 'mentoria', label: 'Mentoría' },
-  { value: 'evaluacion', label: 'Evaluación' },
-  { value: 'proyecto', label: 'Proyecto' },
-  { value: 'evento', label: 'Evento' },
-  { value: 'correo', label: 'Correo' },
-  { value: 'mensaje', label: 'Mensaje' },
-  { value: 'llamada', label: 'Llamada' },
+  { value: 'mentoria', label: 'Mentoría', tipoAsistencia: 'mentoria', peso: null, prioridad: 90, orden: 40, enCalendario: true },
+  // No es una actividad de calendario (los entregables no tienen fecha): está
+  // aquí solo para declarar su peso en el total ponderado.
+  { value: 'entregable', label: 'Entregable', tipoAsistencia: 'entregable', peso: 0.25, prioridad: 950, orden: 950, enCalendario: false },
+  { value: 'evaluacion', label: 'Evaluación', tipoAsistencia: null, peso: null, prioridad: 100, orden: 100, enCalendario: true },
+  { value: 'proyecto', label: 'Proyecto', tipoAsistencia: null, peso: null, prioridad: 100, orden: 110, enCalendario: true },
+  { value: 'evento', label: 'Evento', tipoAsistencia: null, peso: null, prioridad: 100, orden: 120, enCalendario: true },
+  { value: 'correo', label: 'Correo', tipoAsistencia: null, peso: null, prioridad: 100, orden: 200, enCalendario: true },
+  { value: 'mensaje', label: 'Mensaje', tipoAsistencia: null, peso: null, prioridad: 100, orden: 210, enCalendario: true },
+  { value: 'llamada', label: 'Llamada', tipoAsistencia: null, peso: null, prioridad: 100, orden: 220, enCalendario: true },
 ];
 
-const TIPO_LABEL = Object.fromEntries(TIPO_OPCIONES.map((t) => [t.value, t.label]));
-export const tipoLabel = (v) => TIPO_LABEL[v] || v;
+// Registro vivo. Es estado a nivel de módulo, que en esta app funciona porque el
+// único punto de carga (`cargarTiposEvento`) se resuelve ANTES de que se calcule
+// nada: los dos hooks de datos lo esperan dentro de su propio fetch, y
+// `useApplicationsData` bloquea el render de toda la app hasta terminar. Si
+// algún día se llamara después del primer cálculo, habría que subirlo a props
+// como el resto del estado.
+let TIPOS = TIPOS_POR_DEFECTO;
 
-// Mapea el tipo[] de un evento al tipo de session_attendance
-// ('cafe' | 'sesion' | 'mentoria') o null si el evento no lleva asistencia
-// (evaluación, proyecto, evento…).
+// Reemplaza el vocabulario con el de la base. Se ignoran las filas sin `value`
+// para que una fila a medio escribir no tumbe el calendario.
+export function aplicarTipos(filas) {
+  const limpias = (filas || [])
+    .filter((f) => f && (f.valor || f.value))
+    .map((f) => ({
+      value: f.valor ?? f.value,
+      label: f.etiqueta ?? f.label ?? (f.valor ?? f.value),
+      tipoAsistencia: f.tipo_asistencia ?? f.tipoAsistencia ?? null,
+      peso: f.peso == null ? null : Number(f.peso),
+      prioridad: Number(f.prioridad ?? 100),
+      orden: Number(f.orden ?? 100),
+      enCalendario: (f.en_calendario ?? f.enCalendario) !== false,
+      activo: (f.activo ?? true) !== false,
+    }))
+    .filter((f) => f.activo);
+  if (limpias.length) TIPOS = limpias;
+  return TIPOS;
+}
+
+export const tiposEvento = () => TIPOS;
+
+// Los que se ofrecen al crear un evento, en su orden.
+export const tiposDeCalendario = () =>
+  TIPOS.filter((t) => t.enCalendario).sort((a, b) => a.orden - b.orden);
+
+export const tipoLabel = (v) => TIPOS.find((t) => t.value === v)?.label || v;
+
+// Peso de cada bucket del total ponderado, tomado de la fila canónica de cada
+// clave de asistencia: { sesiones: 0.35, cafes: 0.4, entregables: 0.25 }.
+// Las claves sin peso (mentorías) sencillamente no aparecen.
+const BUCKET_DE_CLAVE = { sesion: 'sesiones', cafe: 'cafes', mentoria: 'mentorias', entregable: 'entregables' };
+export function pesosDeAsistencia() {
+  const pesos = {};
+  for (const t of TIPOS) {
+    if (t.peso == null || t.tipoAsistencia !== t.value) continue;
+    pesos[BUCKET_DE_CLAVE[t.value] || t.value] = t.peso;
+  }
+  return pesos;
+}
+
+// Mapea el tipo[] de un evento a la clave de session_attendance
+// ('cafe' | 'sesion' | 'mentoria' | la de un tipo nuevo), o null si el evento no
+// lleva asistencia (evaluación, proyecto, evento…).
 //
-// El orden importa y es lo que distingue los dos usos de 'mentoria':
+// Con varios tipos gana el de menor `prioridad`, y ahí está lo que distingue los
+// dos usos de 'mentoria':
 //   • junto a 'sesion'  → cuenta como sesión y entra en el % de asistencia.
 //     Así están las sesiones 2 a 5 de Círculos, que SON mentorías pero son la
 //     formación misma del programa.
-//   • 'mentoria' a secas → tipo propio: se le toma asistencia igual que a una
+//   • 'mentoria' a secas → clave propia: se le toma asistencia igual que a una
 //     sesión, pero NO entra en ningún porcentaje (decisión del usuario,
 //     2026-08-04). Así están las mentorías de seguimiento de Horizontes Senior,
 //     que son acompañamiento y no formación.
-// De ahí que 'mentoria' se evalúe de último: quien traiga 'sesion' explícito
-// gana, y los datos ya guardados de Círculos no cambian de tipo.
+// De ahí que 'mentoria' tenga la prioridad más alta: quien traiga 'sesion'
+// explícito gana, y los datos ya guardados de Círculos no cambian de clave.
 export function attendanceTipo(event) {
   const t = Array.isArray(event?.tipo) ? event.tipo : [];
-  if (t.includes('cafe')) return 'cafe';
-  if (t.includes('sesion') || t.includes('nivelacion')) return 'sesion';
-  if (t.includes('mentoria')) return 'mentoria';
-  return null;
+  let mejor = null;
+  for (const valor of t) {
+    const def = TIPOS.find((x) => x.value === valor);
+    if (!def?.tipoAsistencia) continue;
+    if (!mejor || def.prioridad < mejor.prioridad) mejor = def;
+  }
+  return mejor ? mejor.tipoAsistencia : null;
 }
 
 // Grupos a mostrar en el panel de asistencia de un evento.

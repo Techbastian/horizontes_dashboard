@@ -12,12 +12,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { credencialesServicio } from './_env.mjs';
 import { grupoEnFecha, rutaActual } from '../src/lib/rutas.js';
+import { attendanceTipo, gruposDeAsistencia, PROGRAMA_HS } from '../src/lib/eventos.js';
 import XLSX from 'xlsx';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const COMMIT = process.argv.includes('--commit');
+// `--detalle` imprime, actividad por actividad, cuántos sí / no / sin registro
+// van a quedar. Es la forma de contrastar el plan contra la hoja antes de
+// escribir, sobre todo cuando la matriz estrena columnas.
+const DETALLE = process.argv.includes('--detalle');
 
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Horizontes_Senior_Matriz_Maestra_VF.xlsx');
 const YEAR = 2026;
@@ -27,6 +32,15 @@ const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Sen
 // tomadas del cronograma V9 (hoja "Matriz de horarios"). Keyed por número de café.
 // Permiten aplicar la misma regla de "gris si no ha pasado" que a las sesiones.
 const CAFE_FECHAS = { 1: '2026-05-21', 2: '2026-06-23', 3: '2026-07-23', 4: '2026-08-26', 5: '2026-09-24', 6: '2026-10-22' };
+
+// Columnas cuyo encabezado no dice lo que la columna es. Se renombran ANTES de
+// clasificarlas, para que la regla general no tenga que conocer excepciones.
+//   • "Cafe 3 entregable" (hoja Senior) es el entregable que se presentó en el
+//     Café 3, no asistencia al café. Leída como café habría entrado en la
+//     casilla del Café 3 del 23/07 —46 registros ya cargados— con un único dato.
+const RENOMBRE_COLUMNAS = {
+  'Cafe 3 entregable': 'Entregable 6 (Café 3)',
+};
 
 const { url, key } = credencialesServicio();
 const supabase = createClient(url, key);
@@ -49,6 +63,9 @@ const SESIONES_DESCARTADAS = [];
 // porque `new Date('2026-07-23')` es medianoche UTC y en Colombia eso cae antes
 // del fin del día 22.
 const HOY_BOGOTA = new Date(Date.now() - 5 * 3600 * 1000).toISOString().slice(0, 10);
+// Fecha local de Bogotá de un timestamptz, que es la que guarda session_attendance.
+const fechaBogota = (iso) =>
+  iso ? new Date(new Date(iso).getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10) : null;
 function esFutura(fecha) {
   if (!fecha) return false; // los entregables no tienen fecha
   return String(fecha).slice(0, 10) > HOY_BOGOTA;
@@ -72,6 +89,21 @@ function extractDate(label) {
   return `${YEAR}-${month}-${day}`;
 }
 
+// Nombre de un entregable a partir del encabezado de su columna. Los entregables
+// NO son eventos de calendario, así que este nombre es lo único que se ve en
+// pantalla y es además su clave contra la base: tiene que ser estable entre
+// corridas (una normalización determinista lo es) y legible.
+// "Entregable 2 3/08/26" → "Entregable 2 · 03/08"; "Entregable 2 " → "Entregable 2".
+function nombreEntregable(col) {
+  const t = String(col).trim();
+  const n = t.match(/entregable\s*(\d+)/i)?.[1];
+  if (!n) return t;
+  const resto = t.replace(/^entregable\s*\d+\s*/i, '').replace(/\d{1,2}\/\d{1,2}(\/\d{2,4})?/g, '').trim();
+  const f = extractDate(t.replace(/^entregable\s*\d+/i, ''));
+  const sufijo = [resto, f ? `· ${f.slice(8, 10)}/${f.slice(5, 7)}` : ''].filter(Boolean).join(' ');
+  return `Entregable ${n}${sufijo ? ` ${sufijo}` : ''}`;
+}
+
 // Detecta la fila del encabezado buscando "Número de Documento" (robusto ante cambios de layout)
 function detectHeaderRow(ws) {
   const raw = XLSX.utils.sheet_to_json(ws, { defval: null, header: 1 });
@@ -89,7 +121,14 @@ function parseSeguimiento(wb, sheetName, grupo) {
   for (const r of rows) {
     const doc = norm(r['Número de Documento']);
     if (!doc) continue;
-    const sesiones = [], cafes = [], entregables = [];
+    const sesiones = [], cafes = [], mentorias = [], entregables = [];
+    // "Estado final" de la hoja. ANTES se ignoraba y se daba por activo a todo
+    // el que apareciera en una hoja: los retirados siguen listados ahí (16 al
+    // 2026-07-27, marcados INACTIVO en el propio Excel), así que cada corrida
+    // los resucitaba —incluidos los retiros registrados desde el dashboard, que
+    // quedaban activos y con su objeto `retiro` puesto a la vez.
+    // Vacío o ausente = activo, que era el comportamiento anterior.
+    const activo = !/^inactiv/i.test(String(r['Estado final'] ?? '').trim());
     // A qué actividad pertenece cada columna "Observaci…": SE LEE DE SU PROPIO
     // NOMBRE, no de la posición en la hoja.
     //
@@ -113,7 +152,7 @@ function parseSeguimiento(wb, sheetName, grupo) {
       const t = String(col);
       const esCafe = /caf[eé]/i.test(t);
       const esSesion = /sesi[oó]n/i.test(t);
-      const candidatas = esCafe ? cafes : esSesion ? sesiones : [...sesiones, ...cafes];
+      const candidatas = esCafe ? cafes : esSesion ? sesiones : [...sesiones, ...cafes, ...mentorias];
 
       const fecha = extractDate(t.replace(/^observaci[oó]n(es)?/i, ''));
       if (fecha) {
@@ -134,11 +173,38 @@ function parseSeguimiento(wb, sheetName, grupo) {
 
     const observacionesPendientes = [];
     let lastActivity = null;
-    for (const [col, val] of Object.entries(r)) {
-      if (/^__empty/i.test(col)) continue;
-      if (/^sesi[oó]n/i.test(col)) {
+    for (const [colCrudo, val] of Object.entries(r)) {
+      if (/^__empty/i.test(colCrudo)) continue;
+      const col = RENOMBRE_COLUMNAS[String(colCrudo).trim()] || colCrudo;
+      // Las observaciones se comprueban PRIMERO: "Observaciones Sesion 27/07"
+      // también empieza por una palabra que clasificaría mal si se mirara
+      // después. Y los entregables antes que los cafés, por "Cafe 3 entregable"
+      // (ver RENOMBRE_COLUMNAS).
+      if (/^observaci/i.test(col)) {
+        // Se resuelve al final de la fila: una observación puede referirse a una
+        // actividad cuya columna todavía no se ha leído.
+        if (val) observacionesPendientes.push({ col, val, anterior: lastActivity });
+      // Anclado al principio: sin el `^`, "Ponderado entregables 25%" también
+      // entraba y creaba una actividad falsa por persona con el ponderado (0.35)
+      // leído como asistencia. "Cafe 3 entregable" no necesita la excepción
+      // porque RENOMBRE_COLUMNAS ya la convirtió en "Entregable 6 (Café 3)".
+      } else if (/^entregable/i.test(col)) {
+        lastActivity = { actividad: nombreEntregable(col), fecha: null, asistio: parseAttendanceValue(val), observacion: null };
+        entregables.push(lastActivity);
+      } else if (/^sesi[oó]n/i.test(col)) {
         lastActivity = { actividad: col.trim(), fecha: extractDate(col), asistio: parseAttendanceValue(val), observacion: null };
         sesiones.push(lastActivity);
+      } else if (/^mentor[ií]a/i.test(col)) {
+        // La matriz marca SOLO a quien asistió: en las seis columnas de mentoría
+        // no hay un solo cero. Un blanco de alguien ACTIVO es una ausencia, no un
+        // dato faltante. Verificado contra lo capturado desde la app: la Mentoría
+        // del 05/08 tiene 22 sí / 44 no en la base, y las hojas marcan
+        // exactamente esos 22 (16 en Junior + 6 en Activación) — los 44 restantes
+        // son justo los activos sin marca. En un inactivo el blanco sí es "no se
+        // le midió": no se le puede contar una ausencia a quien ya no está.
+        const marcado = parseAttendanceValue(val);
+        lastActivity = { actividad: col.trim(), fecha: extractDate(col), asistio: marcado ?? (activo ? false : null), observacion: null };
+        mentorias.push(lastActivity);
       } else if (/^caf[eé]/i.test(col)) {
         // El número del café se guarda: NO se puede usar la posición en la hoja.
         // La hoja de Activación empieza en el Café 3 (el grupo arrancó el 08/07),
@@ -147,13 +213,6 @@ function parseSeguimiento(wb, sheetName, grupo) {
         const numCafe = parseInt(String(col).match(/\d+/)?.[0], 10);
         lastActivity = { actividad: col.trim(), num: numCafe || null, fecha: CAFE_FECHAS[numCafe] || null, asistio: parseAttendanceValue(val), observacion: null };
         cafes.push(lastActivity);
-      } else if (/^entregable/i.test(col)) {
-        lastActivity = { actividad: col.trim(), fecha: null, asistio: parseAttendanceValue(val), observacion: null };
-        entregables.push(lastActivity);
-      } else if (/^observaci/i.test(col)) {
-        // Se resuelve al final de la fila: una observación puede referirse a una
-        // actividad cuya columna todavía no se ha leído.
-        if (val) observacionesPendientes.push({ col, val, anterior: lastActivity });
       }
     }
 
@@ -175,14 +234,8 @@ function parseSeguimiento(wb, sheetName, grupo) {
       email: lc(r['Correo Electrónico']),
       name: (r['Nombre Completo'] || '').trim(),
       grupo,
-      // "Estado final" de la hoja. ANTES se ignoraba y se daba por activo a todo
-      // el que apareciera en una hoja: los retirados siguen listados ahí (16 al
-      // 2026-07-27, marcados INACTIVO en el propio Excel), así que cada corrida
-      // los resucitaba —incluidos los retiros registrados desde el dashboard, que
-      // quedaban activos y con su objeto `retiro` puesto a la vez.
-      // Vacío o ausente = activo, que era el comportamiento anterior.
-      activo: !/^inactiv/i.test(String(r['Estado final'] ?? '').trim()),
-      sesiones, cafes, entregables,
+      activo,
+      sesiones, cafes, mentorias, entregables,
       pond_sesiones: num(r['Ponderado Asistencia sesiones 35%']),
       pond_cafes: num(r['Ponderado asistencia cafés 40%']),
       pond_entregables: num(r['Ponderado entregables 25%']),
@@ -272,9 +325,14 @@ async function main() {
   // hoja Junior traía marcadas sus sesiones del 25/05, 01/06 y 06/07 —que son
   // sesiones JUNIOR, los lunes— y al mandarlas a Senior, que esos días no tenía
   // sesión, aparecieron tres "sesiones Senior" de una sola persona al 100%.
-  const sesionesPorGrupo = { Junior: new Set(), Senior: new Set(), 'Activación': new Set() };
+  // Se guarda por `grupo|tipo`: las mentorías corren el mismo riesgo que las
+  // sesiones (la hoja de Activación trae dos, y esas 20 personas hoy son Junior).
+  const actividadesPorGrupo = new Set();
   for (const [lista, grupo] of [[jr, 'Junior'], [sr, 'Senior'], [act, 'Activación']]) {
-    for (const p of lista) for (const s of p.sesiones) if (s.fecha) sesionesPorGrupo[grupo].add(s.fecha);
+    for (const p of lista) {
+      for (const s of p.sesiones) if (s.fecha) actividadesPorGrupo.add(`${grupo}|sesion|${s.fecha}`);
+      for (const m of p.mentorias) if (m.fecha) actividadesPorGrupo.add(`${grupo}|mentoria|${m.fecha}`);
+    }
   }
 
   // Cohorte de Horizontes Senior, fijada por slug. NO usar status='active': la base
@@ -304,6 +362,76 @@ async function main() {
   const { data: enrs } = await supabase.from('program_enrollments')
     .select('id,candidate_id,status,custom_form_data, candidates(document_number,email)').eq('cohort_id', cohortId);
   const enrByCand = new Map((enrs || []).map(e => [e.candidate_id, e]));
+
+  // ── Con qué nombre está ya guardada cada actividad ─────────────────────────
+  // El Excel y la captura desde la app llaman distinto a lo mismo: la matriz
+  // trae "Sesion 06/08" y la app guardó "V-S08" (el código del evento), pero son
+  // la MISMA casilla — Senior|sesion|2026-08-06, con los mismos 29 sí y 15 no—.
+  // Escribir las dos deja a la persona con dos filas para una sola actividad, de
+  // las que el frontend solo puede mostrar una, elegida por el orden en que
+  // lleguen. Se resuelve igual que en EventAttendanceModal: reusar el nombre que
+  // ya exista. Por orden de preferencia:
+  //   1. la fila que ESA persona ya tiene en la casilla (nadie cambia de nombre);
+  //   2. la que ya tengan otros en la misma casilla (la más frecuente);
+  //   3. el código del evento del calendario — así el Excel y la app convergen
+  //      de aquí en adelante, que es el patrón que ya sigue Círculos;
+  //   4. el nombre de la columna del Excel, si la actividad no está en ningún lado.
+  //
+  // La casilla se identifica por fecha, no por nombre. Sin fecha —los
+  // entregables— la que identifica es la actividad misma: son varios por grupo
+  // y no hay nada más que los separe.
+  const casilla = (grupo, tipo, fecha, actividad) =>
+    fecha ? `${grupo}|${tipo}|${fecha}` : `${grupo}|${tipo}|${actividad}`;
+
+  let filasPrevias = [];
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await supabase.from('session_attendance')
+      .select('candidate_id,grupo,tipo,fecha,actividad').eq('cohort_id', cohortId).range(desde, desde + 999);
+    if (error) throw new Error(`No se pudo leer session_attendance: ${error.message}`);
+    filasPrevias = filasPrevias.concat(data || []);
+    if ((data || []).length < 1000) break;
+  }
+  const actividadDePersona = new Map();
+  const frecuencias = new Map();
+  for (const r of filasPrevias) {
+    const k = casilla(r.grupo, r.tipo, r.fecha, r.actividad);
+    actividadDePersona.set(`${k}|${r.candidate_id}`, r.actividad);
+    if (!frecuencias.has(k)) frecuencias.set(k, new Map());
+    const f = frecuencias.get(k);
+    f.set(r.actividad, (f.get(r.actividad) || 0) + 1);
+  }
+  const actividadDominante = new Map(
+    [...frecuencias].map(([k, f]) => [k, [...f].sort((a, b) => b[1] - a[1])[0][0]])
+  );
+
+  // Código del evento del calendario que corresponde a cada casilla.
+  const { data: eventosCohorte } = await supabase.from('eventos')
+    .select('id,grupo,tipo,codigo,nombre,fecha_hora_inicio').eq('cohort_id', cohortId);
+  const codigoDeCasilla = new Map();
+  for (const e of eventosCohorte || []) {
+    const tipo = attendanceTipo(e);
+    if (!tipo || !e.codigo) continue;
+    const fecha = fechaBogota(e.fecha_hora_inicio);
+    for (const g of gruposDeAsistencia(e, PROGRAMA_HS)) {
+      const k = casilla(g, tipo, fecha, e.codigo);
+      if (!codigoDeCasilla.has(k)) codigoDeCasilla.set(k, e.codigo);
+    }
+  }
+
+  // Renombres aplicados, para que se vean en el resumen en vez de ocurrir en silencio.
+  const RENOMBRES_APLICADOS = new Map();
+  const nombreDeActividad = (grupo, tipo, fecha, candidateId, nombreExcel) => {
+    const k = casilla(grupo, tipo, fecha, nombreExcel);
+    const elegido = actividadDePersona.get(`${k}|${candidateId}`)
+      || actividadDominante.get(k)
+      || codigoDeCasilla.get(k)
+      || nombreExcel;
+    if (elegido !== nombreExcel) {
+      const rk = `${grupo}|${tipo}|${fecha} · "${nombreExcel}" → "${elegido}"`;
+      RENOMBRES_APLICADOS.set(rk, (RENOMBRES_APLICADOS.get(rk) || 0) + 1);
+    }
+    return elegido;
+  };
 
   // ── Construir plan ────────────────────────────────────────────────────────
   const plan = { insertEnrollments: [], updateEnrollments: [], attendanceRows: [], sinCandidato: [], sinCambio: 0 };
@@ -361,17 +489,20 @@ async function main() {
     const grupoDe = (fecha) => (cfPrevio && grupoEnFecha(cfPrevio, fecha)) || p.grupo;
     const push = (tipo, arr) => arr.forEach((a, i) => {
       const grupo = grupoDe(a.fecha);
-      // Una sesión que se reubica en otro grupo solo cuenta si ESE grupo tuvo
-      // sesión ese día. Si no, la celda no le aplicaba a la persona (ver
-      // `sesionesPorGrupo`) y escribirla crearía una actividad fantasma.
+      // Una sesión o mentoría que se reubica en otro grupo solo cuenta si ESE
+      // grupo la tuvo ese día. Si no, la celda no le aplicaba a la persona (ver
+      // `actividadesPorGrupo`) y escribirla crearía una actividad fantasma.
       // Los cafés son compartidos y los entregables no tienen fecha: no aplican.
-      if (tipo === 'sesion' && a.fecha && grupo !== p.grupo && !sesionesPorGrupo[grupo]?.has(a.fecha)) {
+      if ((tipo === 'sesion' || tipo === 'mentoria') && a.fecha && grupo !== p.grupo
+          && !actividadesPorGrupo.has(`${grupo}|${tipo}|${a.fecha}`)) {
         SESIONES_DESCARTADAS.push({ doc: p.doc, name: p.name, actividad: a.actividad, deHoja: p.grupo, aGrupo: grupo });
         return;
       }
       plan.attendanceRows.push({
         cohort_id: cohortId, candidate_id: candidateId, grupo,
-        tipo, actividad: a.actividad, fecha: a.fecha, orden: a.num ?? i + 1,
+        tipo,
+        actividad: nombreDeActividad(grupo, tipo, a.fecha, candidateId, a.actividad),
+        fecha: a.fecha, orden: a.num ?? i + 1,
         // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
         // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
         // false hace que el día que llegue la fecha cuente como que faltaron todos
@@ -380,7 +511,8 @@ async function main() {
         observacion: tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion || null) : (a.observacion || null),
       });
     });
-    push('sesion', p.sesiones); push('cafe', p.cafes); push('entregable', p.entregables);
+    push('sesion', p.sesiones); push('cafe', p.cafes);
+    push('mentoria', p.mentorias); push('entregable', p.entregables);
   }
 
   // Enrollments que NO están en una hoja de seguimiento:
@@ -437,6 +569,32 @@ async function main() {
   console.log(`  ❌ NUNCA elegidos (elegido:false, NO aparecen): ${noElegidos.length}`);
   noElegidos.forEach(x => console.log(`       • ${x.doc} ${x.name} (ruta_BD previa: ${x.grupoPrevio})`));
   console.log(`  Filas de asistencia a cargar:             ${plan.attendanceRows.length}`);
+  const porTipo = {};
+  plan.attendanceRows.forEach(r => { porTipo[r.tipo] = (porTipo[r.tipo] || 0) + 1; });
+  console.log(`       por tipo: ${JSON.stringify(porTipo)}`);
+
+  if (DETALLE) {
+    const porActividad = new Map();
+    for (const r of plan.attendanceRows) {
+      const k = `${r.grupo}|${r.tipo}|${r.fecha ?? '—'.padEnd(10)}|${r.actividad}`;
+      const v = porActividad.get(k) || { si: 0, no: 0, nulo: 0 };
+      if (r.asistio === true) v.si++; else if (r.asistio === false) v.no++; else v.nulo++;
+      porActividad.set(k, v);
+    }
+    console.log(`\n  Detalle por actividad (sí / no / sin registro):`);
+    for (const [k, v] of [...porActividad].sort()) {
+      const [grupo, tipo, fecha, actividad] = k.split('|');
+      console.log(`       ${grupo.padEnd(11)} ${tipo.padEnd(11)} ${fecha}  ${String(actividad).padEnd(26)} ${String(v.si).padStart(3)} / ${String(v.no).padStart(3)} / ${String(v.nulo).padStart(3)}`);
+    }
+  }
+
+  // Cada fila que NO se guarda con el nombre de su columna del Excel. Es lo que
+  // evita la doble fila para una misma actividad, y conviene verlo: si un día
+  // aparece un renombre que no tiene sentido, la casilla se está resolviendo mal.
+  if (RENOMBRES_APLICADOS.size) {
+    console.log(`\n  Actividades que se guardan con el nombre que YA tenían (no se duplican):`);
+    for (const [k, n] of [...RENOMBRES_APLICADOS].sort()) console.log(`       ${k}  (${n})`);
+  }
 
   // Mapeo de las columnas de observaciones. Se imprime siempre: es la única
   // forma de notar a tiempo que la matriz cambió de layout y que las excusas

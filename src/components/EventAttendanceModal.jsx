@@ -199,8 +199,9 @@ export default function EventAttendanceModal({ cohortId, programa, event, onClos
           </div>
           <div className="modal-body">
             <p style={{ color: 'var(--text-secondary)' }}>
-              Este evento ({event.nombre}) no es una sesión, un café ni una mentoría, así que no
-              lleva registro de asistencia.
+              Ninguno de los tipos de «{event.nombre}» lleva registro de asistencia. Puedes
+              cambiárselo desde el editor del evento, o marcar el tipo como «se le toma
+              asistencia» en <strong>Tipos de evento</strong>.
             </p>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
 import { fasesDeMatricula, rutaActual } from '../lib/rutas';
 import { PROGRAMA_HS } from '../lib/eventos';
+import { cargarTiposEvento } from '../lib/tiposEvento';
 import { SIN_CLASIFICAR, contextoAsistencia, excusasDe } from '../lib/retiros';
 
 // Este hook alimenta el dashboard de Horizontes Senior y se fija por slug, NO por
@@ -34,6 +35,11 @@ export function useApplicationsData() {
     try {
       setLoading(true);
       setError(null);
+
+      // 0. Vocabulario de tipos de evento: de él salen los pesos del total
+      // ponderado y qué eventos llevan asistencia, así que tiene que estar antes
+      // de que se calcule nada. Se cachea, así que Círculos no lo repite.
+      await cargarTiposEvento();
 
       // 1. Proyecto de Horizontes Senior (fijado por slug, ver PROJECT_SLUG)
       const { data: proj, error: projErr } = await supabase

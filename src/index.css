@@ -1695,6 +1695,42 @@ body {
   color: #ffffff;
 }
 
+/* "+ Tipo nuevo": no es un tipo, es una acción — borde punteado para que no se
+   confunda con un chip seleccionable. */
+.event-tipo-chip-nuevo {
+  border-style: dashed;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── Gestión de tipos de evento ───────────────────────────────────────────── */
+.tipos-evento-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tipos-evento-tabla th {
+  text-align: left;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tipos-evento-tabla td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.tipos-evento-tabla tr:last-child td {
+  border-bottom: none;
+}
+
 /* ── Acciones por evento (lista del día) ──────────────────────────────────── */
 .events-day-item-actions {
   display: flex;

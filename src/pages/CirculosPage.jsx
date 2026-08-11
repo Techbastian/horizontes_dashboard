@@ -25,8 +25,6 @@ function TooltipEdad({ active, payload, label }) {
   );
 }
 
-const ddmm = (f) => (f ? `${f.slice(8, 10)}/${f.slice(5, 7)}` : '—');
-
 // Esta página es de CARACTERIZACIÓN: quiénes son los participantes. El
 // seguimiento de asistencia (cómo van, a quién llamar) vive solo en /formacion
 // — en Círculos no se hace un acompañamiento tan estricto como en Horizontes
@@ -180,7 +178,7 @@ export default function CirculosPage({ circulos }) {
               {asistenciaSinCargar.length === 1 ? 'Hay una sesión sin asistencia cargada' : `Hay ${asistenciaSinCargar.length} sesiones sin asistencia cargada`}
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              {asistenciaSinCargar.map((s) => `${nombreActividad(s)} (${ddmm(s.fecha)})`).join(' · ')} — ya
+              {asistenciaSinCargar.map((s) => nombreActividad(s)).join(' · ')} — ya
               {asistenciaSinCargar.length === 1 ? ' ocurrió' : ' ocurrieron'} pero no hay ningún registro, así que no
               {asistenciaSinCargar.length === 1 ? ' cuenta' : ' cuentan'} en los porcentajes. Tómala desde Eventos o carga el formulario.
             </div>

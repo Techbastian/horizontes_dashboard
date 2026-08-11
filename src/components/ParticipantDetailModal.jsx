@@ -98,7 +98,7 @@ function Dots({ items, labelPrefix }) {
         const nombre = nombreActividad(it);
         const short = etiquetaCorta(it);
         return (
-          <div key={i} title={`${nombre}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
+          <div key={i} title={`${nombre}: ${estado}`}
             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
             <div style={{ width: 30, height: 30, borderRadius: 8, background: bg, color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
               {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}

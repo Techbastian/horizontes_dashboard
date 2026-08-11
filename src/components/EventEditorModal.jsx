@@ -6,7 +6,7 @@ import {
   bogotaDateTimeToIso,
   bogotaPlusDays,
 } from '../lib/bogotaTime';
-import { gruposDe, TIPO_OPCIONES } from '../lib/eventos';
+import { gruposDe, tiposDeCalendario } from '../lib/eventos';
 
 export default function EventEditorModal({
   cohortId,
@@ -16,9 +16,11 @@ export default function EventEditorModal({
   onClose,
   onSaved,
   onDeleted,
+  onGestionarTipos,
 }) {
   const isEdit = Boolean(event?.id);
   const grupos = gruposDe(programa);
+  const opcionesTipo = tiposDeCalendario();
   // En Horizontes Senior lo más común es crear un evento que aplica a todas las
   // rutas; en Círculos, que es grupo único, el único valor posible es ese grupo.
   const grupoPorDefecto = grupos.includes('Compartido') ? 'Compartido' : grupos[0];
@@ -228,17 +230,33 @@ export default function EventEditorModal({
               <div className="event-form-label" style={{ textTransform: 'none' }}>
                 Tipo de actividad (uno o más)
                 <div className="event-tipo-chips">
-                  {TIPO_OPCIONES.map((t) => (
+                  {opcionesTipo.map((t) => (
                     <button
                       key={t.value}
                       type="button"
                       className={`event-tipo-chip${tipos.includes(t.value) ? ' is-selected' : ''}`}
+                      // El título dice lo que el chip no alcanza a mostrar y es lo
+                      // que decide si el evento lleva botón de asistencia.
+                      title={t.tipoAsistencia ? 'Se le toma asistencia' : 'Sin registro de asistencia'}
                       onClick={() => toggleTipo(t.value)}
                     >
                       {t.label}
+                      {t.tipoAsistencia ? ' ✓' : ''}
                     </button>
                   ))}
+                  {onGestionarTipos && (
+                    <button
+                      type="button"
+                      className="event-tipo-chip event-tipo-chip-nuevo"
+                      onClick={onGestionarTipos}
+                    >
+                      + Tipo nuevo
+                    </button>
+                  )}
                 </div>
+                <span className="event-form-hint" style={{ marginTop: 6 }}>
+                  Los marcados con ✓ llevan registro de asistencia.
+                </span>
               </div>
             </div>
           </div>

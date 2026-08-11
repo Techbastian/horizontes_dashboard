@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import ParticipantDetailModal from '../components/ParticipantDetailModal';
 import { fasesDeMatricula, rutaActual } from '../lib/rutas';
-import { nombreActividad, etiquetaCorta } from '../lib/asistencia';
+import { nombreActividad, tokenCorto } from '../lib/asistencia';
 import { exportarFormacion, filtrarPerfiles } from '../lib/exportar';
 import ExportExcelModal from '../components/ExportExcelModal';
 import InformeModal from '../components/InformeModal';
@@ -78,7 +78,7 @@ function AttendanceCells({ items, pct }) {
               : missed ? (isEntregable ? 'Pendiente' : 'No asistió')
               : 'Sin registro';
             return (
-              <span key={i} title={`${nombreActividad(it)}${it.fecha ? ' · ' + it.fecha : ''}: ${estado}`}
+              <span key={i} title={`${nombreActividad(it)}: ${estado}`}
                 style={{ width: 19, height: 19, borderRadius: 4, background: bg, color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                 {pending ? '·' : attended ? '✓' : missed ? '✗' : '·'}
               </span>
@@ -165,20 +165,18 @@ function AttendanceBarChart({ title, items, kind }) {
           const pending = s.occurred === false;
           const fecha = fechaCorta(s.fecha);
           // En el eje solo caben unos pocos caracteres: los nombres largos del
-          // calendario ("Café de Conocimiento No. 3") se compactan a "C3", y de
-          // ahí se reexpanden a "Café 3" para que todas las barras se lean igual
-          // vengan del Excel ("Cafe 1") o del calendario.
-          const corta = etiquetaCorta(s);
-          const label = kind === 'cafe'
-            ? (/^C\d+$/.test(corta) ? `Café ${corta.slice(1)}` : corta || `C${i + 1}`)
-            : fecha || corta || `S${i + 1}`;
+          // calendario ("Café de Conocimiento No. 3") se compactan a su token
+          // ("C3"). El nombre y la fecha van en DOS renglones porque juntos
+          // ("Café 3 · 23/07") desbordan una columna de 46 px.
+          const label = tokenCorto(s) || `${kind === 'cafe' ? 'C' : 'S'}${i + 1}`;
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, height: '100%', justifyContent: 'flex-end', minWidth: 0 }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: pending ? '#475569' : progressColor(s.pct) }}>{pending ? '—' : `${s.pct}%`}</span>
               <div style={{ width: '100%', maxWidth: 46, background: '#e2e8f0', borderRadius: 6, height: '100%', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
                 <div style={{ width: '100%', height: pending ? '6px' : `${s.pct}%`, background: pending ? '#cbd5e1' : progressColor(s.pct), borderRadius: 6, transition: 'height 0.6s ease' }} />
               </div>
-              <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', fontWeight: kind === 'sesion' ? 600 : 400 }}>{label}</span>
+              <span style={{ fontSize: 10, color: '#475569', whiteSpace: 'nowrap', fontWeight: 600 }}>{label}</span>
+              {fecha && <span style={{ fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap' }}>{fecha}</span>}
               <span style={{ fontSize: 9, color: '#475569' }}>{pending ? 'Pendiente' : `${s.asistieron}/${s.total}`}</span>
             </div>
           );
@@ -467,7 +465,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 : `Hay ${sinCargar.length} actividades sin asistencia cargada`}
             </div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-              {sinCargar.map(s => `${nombreActividad(s)} (${fechaCorta(s.fecha) || 'sin fecha'})`).join(' · ')}
+              {sinCargar.map(s => nombreActividad(s)).join(' · ')}
               {' '}— ya {sinCargar.length === 1 ? 'ocurrió' : 'ocurrieron'} pero no {sinCargar.length === 1 ? 'tiene' : 'tienen'} ningún
               registro, así que {sinCargar.length === 1 ? 'sigue' : 'siguen'} en gris y no {sinCargar.length === 1 ? 'cuenta' : 'cuentan'} en
               los porcentajes. Toma la asistencia desde Eventos o carga el formulario.

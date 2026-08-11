@@ -55,8 +55,18 @@ const ACTIVACION_FECHAS = ['2026-07-08', '2026-07-15', '2026-07-16', '2026-07-21
 // porque son acompañamiento y no formación (decisión del usuario). Si alguna
 // debiera contar, se le agrega 'sesion' y pasa a pesar como tal; así están las
 // sesiones 2 a 5 de Círculos, que son mentorías pero son el programa mismo.
+//
+// Aquí solo van las que este script creó. Las mentorías 2 de cada grupo se
+// crearon a mano desde el calendario (MJ-02 el 05/08 y la de Senior del 10/08,
+// esta sin código) y NO se agregan: el upsert va por `codigo`, así que
+// listarlas crearía un evento duplicado en vez de reconocer el que ya existe.
 const MENTORIAS = [
-  { codigo: 'M-J01', grupo: 'Junior', fecha: '2026-07-29', inicio: '16:00', fin: '17:30' },
+  { codigo: 'M-J01', grupo: 'Junior', fecha: '2026-07-29', inicio: '16:00', fin: '17:00' },
+  // Faltaba en el calendario: la hoja Senior de la matriz la registra
+  // ("Mentoria 1 3/08/26", 13 asistentes) pero no existía como evento, y sin
+  // evento la actividad no aparece en /formacion. Horario igual al de las demás
+  // mentorías de seguimiento (4:00–5:00 p.m. Bogotá).
+  { codigo: 'M-S01', grupo: 'Senior', fecha: '2026-08-03', inicio: '16:00', fin: '17:00' },
 ];
 
 const { url, key } = credencialesServicio();

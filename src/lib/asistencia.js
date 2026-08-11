@@ -13,20 +13,29 @@
 
 // Con extensión .js a propósito: así este módulo también se puede cargar desde
 // node (scripts de verificación contra datos reales), no solo desde Vite.
-import { attendanceTipo, gruposDeAsistencia } from './eventos.js';
+import { attendanceTipo, gruposDeAsistencia, pesosDeAsistencia } from './eventos.js';
 
-// Pesos del total ponderado (Horizontes Senior). Se renormalizan sobre los
-// componentes que ya tienen actividades ocurridas, así que en Círculos —que solo
-// tiene sesiones— el total termina siendo exactamente el % de sesiones.
+// Los pesos del total ponderado los declara cada tipo de evento (tabla
+// `tipos_evento`; ver `pesosDeAsistencia`). Hoy: sesiones 35%, cafés 40%,
+// entregables 25%. Se renormalizan sobre los componentes que ya tienen
+// actividades ocurridas, así que en Círculos —que solo tiene sesiones— el total
+// termina siendo exactamente el % de sesiones, y no hace falta que sumen 1.
 //
-// Las MENTORÍAS no están aquí a propósito: se les registra asistencia como a
+// Las MENTORÍAS no declaran peso a propósito: se les registra asistencia como a
 // una sesión, pero son acompañamiento y no formación, así que no pesan en el
-// porcentaje del programa (decisión del usuario, 2026-08-04). Basta con que
-// falten en este objeto — el bucket 'mentorias' nunca entra en `parts`.
-const PESOS = { sesiones: 0.35, cafes: 0.4, entregables: 0.25 };
+// porcentaje del programa (decisión del usuario, 2026-08-04). Un bucket sin peso
+// nunca entra en `parts`, y por eso un tipo nuevo tampoco se cuela en un
+// porcentaje mientras nadie le ponga uno.
 
-const clave = (grupo, tipo, fecha) => `${grupo}|${tipo}|${fecha ?? 'sin-fecha'}`;
-const claveDeFila = (r) => clave(r.grupo, r.tipo, r.fecha);
+// La fecha es lo que hace que el Excel y el calendario hablen de la MISMA
+// actividad: la app guarda "V-S08" y la matriz "Sesion 06/08", y ambas caen en
+// Senior|sesion|2026-08-06. Pero las actividades SIN fecha —los entregables— no
+// tienen nada que las separe entre sí: con `sin-fecha` fija, los 6 entregables
+// de Senior colapsaban en uno solo (el último leído) y por persona se pisaban
+// unos a otros. Sin fecha, la que distingue es la actividad.
+const clave = (grupo, tipo, fecha, actividad) =>
+  fecha ? `${grupo}|${tipo}|${fecha}` : `${grupo}|${tipo}|${actividad ?? 'sin-actividad'}`;
+const claveDeFila = (r) => clave(r.grupo, r.tipo, r.fecha, r.actividad);
 
 // Bogotá es UTC-5 fijo: la fecha local del evento es la que guarda session_attendance.
 const fechaBogota = (iso) => {
@@ -48,11 +57,20 @@ export function yaPaso(fecha) {
   return String(fecha).slice(0, 10) <= hoyEnBogota();
 }
 
-// Orden cronológico. En HS el ETL numera las actividades con `orden`; la captura
-// desde la app lo deja en null, así que la fecha desempata.
-const porOrden = (a, b) =>
-  (a.orden ?? 0) - (b.orden ?? 0) ||
-  String(a.fecha || '').localeCompare(String(b.fecha || ''));
+// Orden cronológico. Con fecha manda la FECHA: es la cronología real y la tienen
+// todas las actividades salvo los entregables. `orden` solo lo escribe el ETL de
+// HS, así que una actividad que aún no tiene asistencia —viene solo del
+// calendario— lo trae en null; ordenando por `orden` primero, ese null contaba
+// como 0 y las sesiones futuras se colaban ANTES que las de mayo.
+// Las que no tienen fecha (los entregables) van al final, entre ellas por `orden`.
+const porOrden = (a, b) => {
+  if (a.fecha && b.fecha) {
+    return String(a.fecha).localeCompare(String(b.fecha)) || (a.orden ?? 0) - (b.orden ?? 0);
+  }
+  if (a.fecha) return -1;
+  if (b.fecha) return 1;
+  return (a.orden ?? 0) - (b.orden ?? 0);
+};
 
 // Actividades que el calendario espera: un evento por cada grupo al que aplica.
 // Los "Compartido" (cafés de HS) se desdoblan en los tres grupos.
@@ -63,7 +81,7 @@ export function actividadesDelCalendario(eventos = [], programa) {
     if (!tipo) continue; // evaluaciones, proyectos… no llevan asistencia
     const fecha = fechaBogota(e.fecha_hora_inicio);
     for (const grupo of gruposDeAsistencia(e, programa)) {
-      const k = clave(grupo, tipo, fecha);
+      const k = clave(grupo, tipo, fecha, e.codigo || e.nombre);
       // Si dos eventos cayeran en la misma clave, manda el primero: la asistencia
       // se enlaza por (grupo, tipo, fecha) y no podría distinguirlos.
       if (!mapa.has(k)) {
@@ -90,15 +108,29 @@ export function actividadesDelCalendario(eventos = [], programa) {
 const sinPrefijo = (nombre) =>
   String(nombre).replace(/^(?:\S+\s+)?\S+\s*[—–]\s*/, '').trim() || String(nombre);
 
-// Cómo se llama la actividad EN PANTALLA. En Círculos la asistencia se guarda con
-// el código del evento como `actividad` (C-S01) para que el Excel y la captura
-// desde la app escriban la misma fila; ese código es la clave correcta pero no le
-// dice nada a quien lee el tablero. Cuando la actividad ES el código, se muestra
-// el nombre del evento; cuando tiene nombre propio —HS guarda "Sesion 25/05", y
-// los entregables no son eventos— manda ese nombre y nada cambia.
-// La clave sigue siendo `actividad`: esto es solo presentación.
-const etiquetaDe = (v) =>
-  v.codigo && v.nombre && v.actividad === v.codigo ? sinPrefijo(v.nombre) : v.actividad;
+// Fecha en día/mes, que es como se habla de las sesiones ("la del 10/08").
+export const ddmm = (fecha) =>
+  fecha ? `${String(fecha).slice(8, 10)}/${String(fecha).slice(5, 7)}` : null;
+
+// Cómo se llama la actividad EN PANTALLA: el nombre del evento del calendario
+// más su fecha en día/mes. La clave contra la base sigue siendo `actividad`;
+// esto es solo presentación.
+//
+// El nombre guardado en `actividad` no sirve para mostrar: según por dónde haya
+// entrado el dato es un código de evento ("V-S08"), un nombre con fecha del
+// Excel ("Sesion 25/05") o un identificador autogenerado cuando el evento no
+// tenía código ("EVT-2b14c486"). El calendario sí tiene un nombre legible para
+// todas, así que manda él y solo se cae a `actividad` cuando no hay evento
+// detrás — los entregables, que no son eventos.
+//
+// La fecha se añade siempre que exista y no esté ya en el nombre: sin ella, dos
+// sesiones del mismo módulo ("… Parte 1" / "… Parte 2") se distinguen mal, y era
+// justo lo que se perdía al pasar del nombre del Excel al del calendario.
+const etiquetaDe = (v) => {
+  const base = v.nombre ? sinPrefijo(v.nombre) : v.actividad;
+  const f = ddmm(v.fecha);
+  return f && !String(base).includes(f) ? `${base} · ${f}` : base;
+};
 
 // Fallback único para la UI y los exportes, para no repetir el `||` en cada vista.
 export const nombreActividad = (item) => (item && (item.etiqueta || item.actividad)) || '';
@@ -111,19 +143,37 @@ const abreviar = (t) => String(t)
   .replace(/\s+/g, ' ')
   .trim();
 
-// Etiqueta para los sitios donde solo caben dos o tres caracteres: los cuadritos
-// del perfil y el eje del gráfico por actividad. Los nombres del calendario son
-// descriptivos ("Café de Conocimiento No. 3", "Sesión 1 (apertura)") y ahí no
-// caben, así que se reducen a su número. Cuando la actividad tiene nombre propio
-// —HS guarda "Sesion 25/05"— se abrevia el nombre igual que siempre.
-export function etiquetaCorta(item) {
+const LETRA_TIPO = { sesion: 'S', cafe: 'C', mentoria: 'M', entregable: 'E' };
+
+// Token de dos o tres caracteres: "S8", "C3", "M2".
+//
+// El número sale del nombre cuando el nombre lo dice ("Café de Conocimiento
+// No. 3" → C3), y si no, de la POSICIÓN de la actividad dentro de su tipo y su
+// grupo (`indice`, asignado en `calcularAsistencia`).
+//
+// Hacen falta las dos vías. Muchos nombres del calendario no traen número
+// ("Storytelling con datos", "Visualización con Matplotlib") y el código tampoco
+// sirve —puede ser "V-S08", "MJ-02" o no existir—, así que ahí manda la posición,
+// que además es como el usuario cuenta las sesiones. Pero la posición sola se
+// equivoca con los cafés: son los mismos para todos los grupos y Activación
+// empieza en el Café 3, que por posición se llamaría "C1".
+const RE_NUMERO = /(?:sesi[oó]n|caf[eé]|mentor[ií]a|entregable)\D{0,25}?(\d+)/i;
+export function tokenCorto(item) {
   if (!item) return '';
-  const nombre = nombreActividad(item);
-  if (nombre === item.actividad) return abreviar(nombre);
-  const m = nombre.match(/(sesi[oó]n|caf[eé]|mentor[ií]a|entregable)\D{0,25}?(\d+)/i);
-  // Un nombre del que no se puede sacar número (HS: "Storytelling con datos")
-  // cae al código del evento, que es corto por construcción.
-  return m ? `${m[1][0].toUpperCase()}${m[2]}` : abreviar(item.actividad);
+  const letra = LETRA_TIPO[item.tipo];
+  if (!letra) return abreviar(nombreActividad(item));
+  const delNombre = nombreActividad(item).match(RE_NUMERO)?.[1];
+  const n = delNombre || item.indice;
+  return n ? `${letra}${n}` : abreviar(nombreActividad(item));
+}
+
+// Etiqueta para los sitios donde solo caben unos pocos caracteres: los cuadritos
+// del perfil y el eje del gráfico por actividad. Lleva la fecha en día/mes
+// porque es como se identifica una sesión al hablar de ella ("la del 10/08").
+export function etiquetaCorta(item) {
+  const t = tokenCorto(item);
+  const f = ddmm(item?.fecha);
+  return f ? `${t} · ${f}` : t;
 }
 
 // Primera fecha con registro de cada grupo. Sirve de corte: el calendario no debe
@@ -213,7 +263,10 @@ export function pctOcurridas(items) {
 // tragaba todo lo desconocido, un tipo nuevo caía en `entregables` y se colaba
 // en el 25% sin que nadie lo notara.
 const BUCKETS = { sesion: 'sesiones', cafe: 'cafes', mentoria: 'mentorias', entregable: 'entregables' };
-const bucketDe = (tipo) => BUCKETS[tipo] || 'entregables';
+// Un tipo nuevo estrena su propio bucket, con el nombre de su clave. Antes el
+// default era 'entregables' y cualquier tipo desconocido se colaba en el 25%;
+// ahora entra en un bucket propio, que solo pesa si su tipo declara un peso.
+const bucketDe = (tipo) => BUCKETS[tipo] || tipo;
 
 // FASES: los grupos por los que ha pasado una persona, en orden cronológico.
 // Las filas de session_attendance son inmutables y conservan el grupo donde
@@ -254,6 +307,10 @@ function perteneceAFase(a, f, fila) {
  *                   aparezca igual en la fila de cada persona. `fases` manda sobre `grupo`.
  */
 export function calcularAsistencia({ filas = [], eventos = [], programa, candidatos = [] }) {
+  // Se leen en cada llamada, no una vez al importar: el vocabulario de tipos se
+  // carga de la base al arrancar y una constante de módulo se quedaría con los
+  // pesos por defecto.
+  const PESOS = pesosDeAsistencia();
   const esperadas = actividadesDelCalendario(eventos, programa);
   const inv = inventarioActividades(filas, esperadas);
   const ocurridas = calcularOcurridas(inv);
@@ -268,7 +325,14 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
     if (!porGrupoActividades.has(v.grupo)) porGrupoActividades.set(v.grupo, []);
     porGrupoActividades.get(v.grupo).push({ k, ...v });
   }
-  for (const lista of porGrupoActividades.values()) lista.sort(porOrden);
+  // Posición dentro del tipo, ya en orden cronológico: la "Sesión 8" de Senior es
+  // la octava del grupo. De aquí sale el token corto (S8/C3/M2) del perfil y del
+  // eje de los gráficos.
+  for (const lista of porGrupoActividades.values()) {
+    lista.sort(porOrden);
+    const cuenta = {};
+    for (const a of lista) a.indice = cuenta[a.tipo] = (cuenta[a.tipo] || 0) + 1;
+  }
 
   // ── Por candidato ─────────────────────────────────────────────────────────
   const porCandidato = {};
@@ -331,6 +395,7 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
           actividad: a.actividad,
           // Cómo mostrarla; `actividad` sigue siendo la clave contra la base.
           etiqueta: a.etiqueta,
+          indice: a.indice,
           fecha: a.fecha,
           orden: a.orden,
           // Sin fila = nunca se le registró nada a esta persona en esa actividad.
@@ -343,22 +408,33 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
         // fase ya viene ordenada y las fases van en orden cronológico, así que
         // concatenar da el orden correcto. Reordenar por fecha movería los
         // entregables (sin fecha) al principio.
-        g[bucketDe(a.tipo)].push(item);
+        const bucket = bucketDe(a.tipo);
+        (g[bucket] ||= []).push(item);
       }
       g.fases.push({ ...f, items });
     });
 
-    g.pctSesiones = pctOcurridas(g.sesiones);
-    g.pctCafes = pctOcurridas(g.cafes);
-    g.pctEntregables = pctOcurridas(g.entregables);
-    // Informativo: se muestra en el perfil, pero deliberadamente NO se suma al
-    // total ponderado (ver PESOS).
-    g.pctMentorias = pctOcurridas(g.mentorias);
+    // Un porcentaje por bucket, incluidos los de tipos que se hayan creado
+    // después. Los cuatro de siempre se exponen además con nombre propio porque
+    // la UI los pinta por separado.
+    const pct = {};
+    for (const [bucket, items] of Object.entries(g)) {
+      if (bucket === 'fases' || !Array.isArray(items)) continue;
+      pct[bucket] = pctOcurridas(items);
+    }
+    g.pctSesiones = pct.sesiones ?? null;
+    g.pctCafes = pct.cafes ?? null;
+    g.pctEntregables = pct.entregables ?? null;
+    // Informativo: se muestra en el perfil, pero no pesa mientras el tipo
+    // 'mentoria' no declare un peso (ver PESOS).
+    g.pctMentorias = pct.mentorias ?? null;
 
+    // Solo entran los buckets cuyo tipo declara un peso: uno nuevo se registra y
+    // se muestra, pero no toca los porcentajes hasta que alguien se lo asigne.
     const parts = [];
-    if (g.pctSesiones != null) parts.push([PESOS.sesiones, g.pctSesiones]);
-    if (g.pctCafes != null) parts.push([PESOS.cafes, g.pctCafes]);
-    if (g.pctEntregables != null) parts.push([PESOS.entregables, g.pctEntregables]);
+    for (const [bucket, valor] of Object.entries(pct)) {
+      if (valor != null && PESOS[bucket] != null) parts.push([PESOS[bucket], valor]);
+    }
     const wsum = parts.reduce((s, [w]) => s + w, 0);
     g.totalPonderado = wsum
       ? Math.round(parts.reduce((s, [w, v]) => s + w * v, 0) / wsum)
@@ -392,6 +468,8 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
           return {
             actividad: a.actividad,
             etiqueta: a.etiqueta,
+            tipo: a.tipo,
+            indice: a.indice,
             fecha: a.fecha,
             orden: a.orden,
             asistieron,
@@ -400,11 +478,12 @@ export function calcularAsistencia({ filas = [], eventos = [], programa, candida
             pct: total ? Math.round((asistieron / total) * 100) : 0,
           };
         });
-    porGrupo[grupo] = {
-      sesiones: construir('sesion'),
-      cafes: construir('cafe'),
-      mentorias: construir('mentoria'),
-    };
+    // Una lista por cada clave de asistencia presente en el grupo, para que un
+    // tipo nuevo también tenga sus barras sin tocar este archivo.
+    porGrupo[grupo] = {};
+    for (const tipo of new Set(actividades.map((a) => a.tipo))) {
+      porGrupo[grupo][bucketDe(tipo)] = construir(tipo);
+    }
   }
 
   // ── Actividades ya ocurridas sin un solo registro ─────────────────────────
