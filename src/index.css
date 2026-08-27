@@ -1580,6 +1580,12 @@ body {
   --grp-color: var(--accent-blue);
   --grp-dim: var(--accent-blue-dim);
 }
+/* Junior x Círculos: los que pasaron de Círculos a HS. Índigo, entre el violeta
+   de Junior y el azul de Círculos, para que se lea de dónde vienen. */
+.grp-junior-circulos {
+  --grp-color: #6366f1;
+  --grp-dim: rgba(99, 102, 241, 0.15);
+}
 
 /* ── Filtros por grupo ────────────────────────────────────────────────────── */
 .events-group-filters {

@@ -13,7 +13,7 @@ import InformeAsistencia from '../components/InformeAsistencia';
 const PROGRAMAS = {
   'horizontes-senior': {
     nombre: 'Horizontes Senior',
-    grupos: ['Senior', 'Junior', 'Activación'],
+    grupos: ['Senior', 'Junior', 'Activación', 'Junior x Círculos'],
     // HS pondera sesiones 35% / cafés 40% / entregables 25%; Círculos solo tiene
     // sesiones, así que su "total" es la asistencia simple y esas columnas sobran.
     columnasExtra: true,
@@ -36,6 +36,7 @@ const GROUP_META = {
   Junior:     { color: 'var(--accent-violet)', solid: '#7c3aed', icon: '🌱', label: 'Ruta Junior' },
   'Activación': { color: '#f59e0b',            solid: '#f59e0b', icon: '⚡', label: 'Estrategia de Activación' },
   'Círculos': { color: 'var(--accent-blue)',   solid: '#3b82f6', icon: '🔗', label: 'Círculos de Conocimiento' },
+  'Junior x Círculos': { color: '#6366f1',     solid: '#6366f1', icon: '🎓', label: 'Junior x Círculos' },
 };
 
 function pct01(v) { return v == null ? null : Math.round(v * 100); }

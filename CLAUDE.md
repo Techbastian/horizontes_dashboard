@@ -20,8 +20,9 @@ npm run preview    # previsualiza el build
 # ETL con DRY RUN por defecto (upload_asistencia, upload_asistencia_circulos,
 #                              upload_cierre_circulos, upload_circulos,
 #                              upload_cursos_circulos, upload_eventos,
-#                              upload_eventos_circulos, upload_registro_circulos,
-#                              upload_retiros, limpiar_marcadores_asistencia)
+#                              upload_eventos_circulos, upload_junior_circulos,
+#                              upload_registro_circulos, upload_retiros,
+#                              limpiar_marcadores_asistencia)
 node scripts/upload_asistencia.mjs            # dry run (no escribe)
 node scripts/upload_asistencia.mjs --detalle  # + sí/no/sin registro actividad por actividad
 node scripts/upload_asistencia.mjs --commit   # escribe
@@ -114,6 +115,15 @@ Tres cosas que hay que tener presentes: el **8 es el mínimo exigido para aproba
 **`resultado_final` es una decisión del equipo, no una fórmula** — los umbrales se solapan (hay un `APROBADO` con 0.450 y gente sin resultado con 0.550, y un `RECONOCIMIENTO` con 0.000). Se importa literal y de ahí sale `decision_final`: `APROBADO`, `APROBADO - PASA A HORIZONTES` y `RECONOCIMIENTO` → **Aprobado** (los dos últimos con `nota`); sin resultado y con alguna señal de participación → **No aprobado** (91); sin ninguna señal → **No evaluado** (144). Nunca derives la aprobación del ponderado.
 
 ⚠️ **Los rótulos de las 6 columnas de asistencia del Excel están corridos un lugar.** «Sesion de apertura» **es el 29/07**, no el 21/07. Se verificó contra los formularios originales de Google Forms: de sus 71 marcados, 70 respondieron el del 29/07 y solo 56 el del 21/07, con **15 marcados que ni siquiera respondieron el del 21/07** — si fuera esa sesión medida con otro criterio, tendría que ser un subconjunto de sus 96. El mapeo bueno, confirmado por el usuario, está en la constante `SESIONES` del script. **El 29/07 (`C-S02`) va con `pisar: false`**: su fuente primaria es el formulario (73 asistentes) y el Excel trae 71, así que el ETL solo reporta las 4 diferencias en vez de perder asistentes reales.
+
+### «Junior x Círculos»: el puente entre los dos programas
+Los 15 que aprobaron Círculos pasaron a Horizontes Senior el **2026-08-26** (los 12 `APROBADO - PASA A HORIZONTES` más 3 de los 4 `RECONOCIMIENTO`). Los matricula `scripts/upload_junior_circulos.mjs` desde la hoja **`Seguimiento Junior 2`** de la matriz. **Sin cambios de esquema**: son filas de `program_enrollments` en la cohorte de HS; `candidates` no se toca (ya existían) y su matrícula de Círculos se conserva como histórico.
+
+**Grupo propio, no «Junior» a secas.** Tienen sesiones aparte los martes: si esas fueran eventos de Junior, el calendario se las exigiría también a los 66 Junior de hoy y les hundiría el porcentaje.
+
+🔴 **Pero en los KPI del tablero cuentan como Junior, y eso hay que declararlo.** `useApplicationsData` agrega sobre un objeto fijo `{Senior, Junior, Activación}` con una guarda `if (ruta in selActivos)` que **descarta en silencio** cualquier ruta que no esté ahí: los 15 habrían entrado en `totalElegidos` pero no en `totalActivos`, las tarjetas de "Distribución de Seleccionados" habrían dejado de sumar y la deserción habría salido sesgada. Lo resuelve `rutaKPI()` en `src/lib/eventos.js` (mapa `GRUPO_KPI`). **Al agregar cualquier grupo nuevo a HS, decláralo ahí además de en `GRUPOS_POR_PROGRAMA`.**
+
+⚠️ **Un grupo nuevo necesita al menos un registro de asistencia o el motor le inventa el pasado.** `inicioPorGrupo` saca la fecha de corte del primer registro que tenga el grupo, y **un grupo sin registros no tiene corte**: como los cafés son eventos `Compartido` y se desdoblan en todos los grupos, aparecían debiendo los cafés 1, 2 y 3 (de mayo a julio, antes de existir) y los tres salían en el aviso de "sesiones sin asistencia cargada". Por eso el script carga también el **Café 4 (26/08)**, que es su primera actividad real —14 de 15 asistieron— y deja el corte donde va. El `historial_ruta` con `desde: 2026-08-26` hace lo propio por persona.
 
 ### Cuatro reglas de negocio críticas (viven en JS, no en los datos)
 1. **`elegido`**: solo aparecen en Formación/selección quienes fueron elegidos. La UI filtra `custom_form_data.elegido !== false` en varios sitios (FormationPage, metrics.transiciones, CandidateTable). Los enrollments con `elegido:false` son heredados/erróneos y no deben mostrarse.

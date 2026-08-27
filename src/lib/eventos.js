@@ -8,16 +8,36 @@
 export const PROGRAMA_HS = 'horizontes-senior';
 export const PROGRAMA_CIRCULOS = 'circulos-de-conocimiento';
 
+// 'Junior x Círculos' son los 15 que aprobaron Círculos de Conocimiento y pasaron
+// a Horizontes Senior en nivel Junior el 2026-08-26. Van como grupo aparte —y no
+// dentro de Junior— porque tienen sesiones propias los martes: si sus eventos
+// fueran de Junior, el calendario se los exigiría también a los 66 Junior de hoy
+// y les hundiría el porcentaje. En los KPI del tablero sí cuentan como Junior
+// (ver GRUPO_KPI más abajo).
 const GRUPOS_POR_PROGRAMA = {
-  [PROGRAMA_HS]: ['Junior', 'Senior', 'Activación', 'Compartido'],
+  [PROGRAMA_HS]: ['Junior', 'Senior', 'Activación', 'Junior x Círculos', 'Compartido'],
   [PROGRAMA_CIRCULOS]: ['Círculos'],
 };
 
 // Grupos con participantes: excluye "Compartido", que se desglosa en los demás.
 const PARTICIPANTES_POR_PROGRAMA = {
-  [PROGRAMA_HS]: ['Junior', 'Senior', 'Activación'],
+  [PROGRAMA_HS]: ['Junior', 'Senior', 'Activación', 'Junior x Círculos'],
   [PROGRAMA_CIRCULOS]: ['Círculos'],
 };
+
+// A qué ruta se suma cada grupo en los KPI del tablero. Existe porque las
+// agregaciones de useApplicationsData cuentan sobre un objeto fijo
+// ({Senior, Junior, Activación}) y descartan EN SILENCIO cualquier ruta que no
+// esté ahí: sin este mapeo los 15 de Junior x Círculos entrarían en
+// `totalElegidos` pero no en `totalActivos`, las tarjetas de "Distribución de
+// Seleccionados" dejarían de sumar y la tasa de deserción saldría sesgada.
+const GRUPO_KPI = {
+  'Junior x Círculos': 'Junior',
+};
+
+// Ruta bajo la que se agrega un grupo en los KPI. Los grupos normales se
+// devuelven tal cual.
+export const rutaKPI = (ruta) => GRUPO_KPI[ruta] || ruta;
 
 // Ante un slug desconocido se cae a Horizontes Senior: es el programa base y deja
 // el calendario usable, en vez de dejarlo sin grupos y sin poder crear eventos.
@@ -55,6 +75,7 @@ export const GRUPO_CLASS = {
   Activación: 'grp-activacion', // ámbar
   Compartido: 'grp-compartido', // gris
   Círculos: 'grp-circulos', // azul
+  'Junior x Círculos': 'grp-junior-circulos', // índigo (entre el violeta de Junior y el azul de Círculos)
 };
 
 // ── Vocabulario de tipos de evento ─────────────────────────────────────────

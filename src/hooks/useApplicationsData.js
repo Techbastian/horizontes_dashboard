@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { calcularAsistencia } from '../lib/asistencia';
 import { fasesDeMatricula, rutaActual } from '../lib/rutas';
-import { PROGRAMA_HS } from '../lib/eventos';
+import { PROGRAMA_HS, rutaKPI } from '../lib/eventos';
 import { cargarTiposEvento } from '../lib/tiposEvento';
 import { SIN_CLASIFICAR, contextoAsistencia, excusasDe } from '../lib/retiros';
 
@@ -603,8 +603,12 @@ export function useApplicationsData() {
       const activo = cf.estado_activo !== false && e.status !== 'inactive';
       const cambio = cf.cambio_nivel || '';
       const ruta = cf.ruta_asignada || 'Sin asignar';
+      // Los grupos derivados se suman a su ruta base: 'Junior x Círculos' cuenta
+      // como Junior. Sin esto la guarda `in selActivos` los descartaría en
+      // silencio y las tarjetas dejarían de sumar `totalElegidos`.
+      const rutaKpi = rutaKPI(ruta);
       totalElegidos++;
-      if (ruta in selActivos) (activo ? selActivos : selInactivos)[ruta]++;
+      if (rutaKpi in selActivos) (activo ? selActivos : selInactivos)[rutaKpi]++;
 
       // La Estrategia de Activación fue una fase de ARRANQUE, no un grupo
       // permanente: sus 20 personas migraron a Junior el 23/07 y hoy nadie
