@@ -176,6 +176,20 @@ function HistoryBadge({ profile }) {
     );
   }
 
+  // De dónde viene la persona, cuando no llegó por la selección de HS. Se lee de
+  // `origen` y no de `cambio_nivel` a propósito: ese campo alimenta los
+  // contadores de ascensos/descensos y el acumulado de Activación, y meterle
+  // texto libre los ensuciaría.
+  if (profile.customFormData?.origen === 'circulos-de-conocimiento') {
+    const cierre = profile.customFormData?.cierre_circulos;
+    return (
+      <span title={cierre ? `Círculos de Conocimiento · ${cierre.resultado_final}` : 'Viene de Círculos de Conocimiento'} style={{
+        fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99,
+        background: '#6366f122', color: '#6366f1', whiteSpace: 'nowrap',
+      }}>🔗 Viene de Círculos</span>
+    );
+  }
+
   const c = profile.cambioNivel || '';
   let bg, color, icon, text;
   if (/Ascendió/i.test(c))      { bg = '#7c3aed22'; color = '#a78bfa'; icon = '🔼'; text = 'Subió a Senior'; }

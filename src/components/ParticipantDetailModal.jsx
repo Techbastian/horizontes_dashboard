@@ -298,6 +298,21 @@ export default function ParticipantDetailModal({ profile, courseProgress, attend
                 Historial en el programa
               </div>
               <div style={{ background: '#ffffff', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {/* De dónde viene, cuando no llegó por la selección de HS. Va
+                    arriba del todo porque explica por qué esta persona está aquí
+                    sin figurar en el embudo de postulación del programa. */}
+                {profile.customFormData?.origen === 'circulos-de-conocimiento' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', paddingBottom: 8, borderBottom: '1px solid var(--border-subtle)' }}>
+                    <span className="events-badge events-badge-grupo grp-circulos">🔗 Círculos de Conocimiento</span>
+                    <span style={{ fontSize: 12, color: '#475569' }}>
+                      Viene de Círculos de Conocimiento
+                      {profile.customFormData?.cierre_circulos?.resultado_final
+                        ? ` · ${profile.customFormData.cierre_circulos.resultado_final}`
+                        : ''}
+                      {fases[0]?.desde ? ` · ingresó el ${fases[0].desde.slice(8, 10)}/${fases[0].desde.slice(5, 7)}` : ''}
+                    </span>
+                  </div>
+                )}
                 {/* Línea de tiempo de grupos. Solo aparece si pasó por más de uno:
                     con una sola fase no cuenta nada que no diga ya "Ruta actual". */}
                 {fases.length > 1 && (
