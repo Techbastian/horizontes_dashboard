@@ -40,6 +40,14 @@ const CAFE_FECHAS = { 1: '2026-05-21', 2: '2026-06-23', 3: '2026-07-23', 4: '202
 //     casilla del Café 3 del 23/07 —46 registros ya cargados— con un único dato.
 const RENOMBRE_COLUMNAS = {
   'Cafe 3 entregable': 'Entregable 6 (Café 3)',
+  // La sesión de Seaborn (V-S09) fue el JUEVES 20/08 —el horario de Senior— y así
+  // está en el calendario, con su asistencia ya capturada desde la app. La hoja
+  // Senior la encabeza "Sesion 21/08", que es viernes. Es la misma clase: se
+  // comprobó persona por persona contra V-S09 y coinciden las 44 (36 sí / 8 no,
+  // cero diferencias). Sin este renombre la clave `grupo|tipo|fecha` las trata
+  // como dos actividades distintas y la sesión queda contada dos veces.
+  'Sesion 21/08': 'Sesion 20/08',
+  'Observacion Sesion 21/08': 'Observacion Sesion 20/08',
 };
 
 const { url, key } = credencialesServicio();
@@ -386,16 +394,26 @@ async function main() {
   let filasPrevias = [];
   for (let desde = 0; ; desde += 1000) {
     const { data, error } = await supabase.from('session_attendance')
-      .select('candidate_id,grupo,tipo,fecha,actividad').eq('cohort_id', cohortId).range(desde, desde + 999);
+      .select('candidate_id,grupo,tipo,fecha,actividad,observacion').eq('cohort_id', cohortId).range(desde, desde + 999);
     if (error) throw new Error(`No se pudo leer session_attendance: ${error.message}`);
     filasPrevias = filasPrevias.concat(data || []);
     if ((data || []).length < 1000) break;
   }
   const actividadDePersona = new Map();
   const frecuencias = new Map();
+  // Excusas ya guardadas, indexadas por la MISMA clave del upsert. La matriz no
+  // es la única fuente: la app escribe observaciones al tomar asistencia desde
+  // el evento, y esas columnas no existen en el Excel. Sin este respaldo, cada
+  // corrida las pisaba con null y se perdían en silencio (pasó el 2026-08-27:
+  // 4 excusas borradas, 3 de V-J07 y 1 de la Sesion 27/07). Mismo criterio que
+  // `obsPrevia` en upload_asistencia_circulos.mjs.
+  const obsPrevia = new Map();
   for (const r of filasPrevias) {
     const k = casilla(r.grupo, r.tipo, r.fecha, r.actividad);
     actividadDePersona.set(`${k}|${r.candidate_id}`, r.actividad);
+    if (String(r.observacion ?? '').trim()) {
+      obsPrevia.set(`${r.grupo}|${r.tipo}|${r.actividad}|${r.candidate_id}`, r.observacion);
+    }
     if (!frecuencias.has(k)) frecuencias.set(k, new Map());
     const f = frecuencias.get(k);
     f.set(r.actividad, (f.get(r.actividad) || 0) + 1);
@@ -498,17 +516,22 @@ async function main() {
         SESIONES_DESCARTADAS.push({ doc: p.doc, name: p.name, actividad: a.actividad, deHoja: p.grupo, aGrupo: grupo });
         return;
       }
+      const actividad = nombreDeActividad(grupo, tipo, a.fecha, candidateId, a.actividad);
       plan.attendanceRows.push({
         cohort_id: cohortId, candidate_id: candidateId, grupo,
         tipo,
-        actividad: nombreDeActividad(grupo, tipo, a.fecha, candidateId, a.actividad),
+        actividad,
         fecha: a.fecha, orden: a.num ?? i + 1,
         // Una actividad que aún no ocurre no puede tener asistencia: el Excel trae
         // "No" en los cafés futuros y eso es un marcador, no un dato. Guardarlo como
         // false hace que el día que llegue la fecha cuente como que faltaron todos
         // y hunda los porcentajes. null = no registrado (ver src/lib/asistencia.js).
         asistio: esFutura(a.fecha) ? null : a.asistio,
-        observacion: tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion || null) : (a.observacion || null),
+        // Si el Excel no trae excusa para esta casilla, se conserva la que ya
+        // hubiera (normalmente capturada desde la app) en vez de borrarla.
+        observacion: (tipo === 'cafe' ? (cafeMotivos[a.num] || a.observacion) : a.observacion)
+          || obsPrevia.get(`${grupo}|${tipo}|${actividad}|${candidateId}`)
+          || null,
       });
     });
     push('sesion', p.sesiones); push('cafe', p.cafes);

@@ -46,6 +46,52 @@ function progressColor(p) {
   return '#ef4444';
 }
 
+// Decisión de cierre del programa. Solo hay tres valores y los tres importan:
+// "No evaluado" es distinto de "No aprobado" —quien nunca se registró, ni asistió,
+// ni completó un curso no llegó a medirse— y no debe leerse como una reprobación.
+const DECISION_META = {
+  'Aprobado':    { bg: 'var(--accent-emerald-dim)', color: 'var(--accent-emerald)' },
+  'No aprobado': { bg: 'var(--accent-rose-dim)',    color: 'var(--accent-rose)' },
+  'No evaluado': { bg: 'rgba(148,163,184,0.16)',    color: '#64748b' },
+};
+
+function DecisionBadge({ cierre }) {
+  if (!cierre?.decision_final) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
+  const meta = DECISION_META[cierre.decision_final] || DECISION_META['No evaluado'];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+      <span className="badge" style={{ background: meta.bg, color: meta.color, whiteSpace: 'nowrap' }}>
+        {cierre.decision_final}
+      </span>
+      {/* La nota es lo que distingue a quien pasa a Horizontes Senior y a quien
+          recibe reconocimiento; sin ella los 28 aprobados se ven todos iguales. */}
+      {cierre.nota && (
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.2, maxWidth: 130 }}>{cierre.nota}</span>
+      )}
+    </div>
+  );
+}
+
+// Cursos de la plataforma en Círculos. El reporte llega agregado (un conteo por
+// persona, no qué curso hizo cada quien), así que no hay barra de avance: se
+// muestra el número contra el mínimo de 8 con el que se decidió la aprobación.
+const MINIMO_CURSOS = 8;
+
+function CursosCell({ cierre }) {
+  if (!cierre || cierre.cursos_completos == null) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
+  const n = cierre.cursos_completos;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <span style={{ fontSize: 14, fontWeight: 800, color: n >= MINIMO_CURSOS ? '#10b981' : n > 0 ? '#f97316' : '#ef4444' }}>
+        {n}<span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}> / {MINIMO_CURSOS}</span>
+      </span>
+      {cierre.cursos_en_progreso > 0 && (
+        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{cierre.cursos_en_progreso} en progreso</span>
+      )}
+    </div>
+  );
+}
+
 function Bar({ pct, width = 90 }) {
   if (pct == null) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
   return (
@@ -261,7 +307,17 @@ export default function FormationPage({ enrollments = [], formationProgress, att
         pondSesiones: att ? att.pctSesiones : pct01(cf.pond_sesiones),
         pondCafes: att ? att.pctCafes : pct01(cf.pond_cafes),
         pondEntregables: att ? att.pctEntregables : pct01(cf.pond_entregables),
-        totalPonderado: att ? att.totalPonderado : pct01(cf.total_ponderado),
+        // Cierre del programa (hoy solo Círculos): lo escribe
+        // scripts/upload_cierre_circulos.mjs desde la base maestra v2.
+        cierre: cf.cierre || null,
+        // Cuando hay cierre, el total es el OFICIAL del Excel, no el que calcula
+        // el motor de asistencia. Son modelos distintos —Círculos pondera cursos
+        // 60% / mentorías 40% más dos bonos de 2.5%, y no renormaliza— y es el
+        // número con el que se decidió quién aprobaba, así que manda ese.
+        // Puede pasar de 100%: el denominador de cursos (8) es el mínimo exigido.
+        totalPonderado: cf.cierre
+          ? pct01(cf.cierre.total_ponderado)
+          : att ? att.totalPonderado : pct01(cf.total_ponderado),
       };
     });
   }, [datos.enrollments, datos.attendanceByCandidate]);
@@ -568,8 +624,9 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 {(cfg.columnasExtra
                   ? ['Participante', 'Documento', 'Historial', 'Asist. sesiones', 'Cafés', 'Entregable', 'Total', 'Estado']
                   // Círculos: sin transiciones de nivel ni cafés/entregables. En su
-                  // lugar, el avance en plataforma, que es su segunda métrica.
-                  : ['Participante', 'Documento', 'Asist. sesiones', 'Progreso plataforma', 'Total', 'Estado']
+                  // lugar, los cursos de la plataforma —que es su segunda métrica y
+                  // pesa el 60% del total— y la decisión de cierre del programa.
+                  : ['Participante', 'Documento', 'Asist. sesiones', 'Cursos', 'Total', 'Decisión final', 'Estado']
                 ).map((h, i) => (
                   <th key={h} style={{ textAlign: i === 0 ? 'left' : 'center', padding: '12px 14px', background: 'rgba(148,163,184,0.08)', fontSize: 12, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -602,14 +659,20 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                       </td>
                     </>
                   ) : (
-                    // Avance en plataforma. "—" mientras no se cargue el reporte.
+                    // Cursos completos cuando ya hay cierre cargado; si no, el
+                    // avance por curso de cohort_course_status ("—" si tampoco).
                     <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
-                      <Bar pct={avance ? avance.avgProgress : null} width={80} />
+                      {p.cierre ? <CursosCell cierre={p.cierre} /> : <Bar pct={avance ? avance.avgProgress : null} width={80} />}
                     </td>
                   )}
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
                     <span style={{ fontSize: 14, fontWeight: 800, color: progressColor(p.totalPonderado) }}>{p.totalPonderado ?? '—'}%</span>
                   </td>
+                  {!cfg.columnasExtra && (
+                    <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
+                      <DecisionBadge cierre={p.cierre} />
+                    </td>
+                  )}
                   <td style={{ background: 'rgba(148,163,184,0.04)', padding: '14px', textAlign: 'center', borderRadius: 4 }}>
                     {p.isActive
                       ? <span className="badge badge-approved" style={{ background: 'var(--accent-emerald-dim)', color: 'var(--accent-emerald)' }}>Activo</span>
@@ -619,7 +682,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={cfg.columnasExtra ? 8 : 6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay participantes en este grupo.</td></tr>
+                <tr><td colSpan={cfg.columnasExtra ? 8 : 7} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No hay participantes en este grupo.</td></tr>
               )}
             </tbody>
           </table>

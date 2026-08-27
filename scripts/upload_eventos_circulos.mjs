@@ -54,7 +54,22 @@ const CALENDARIO = [
   { codigo: 'C-S02', nombre: 'Círculos — Sesión 2 (mentoría)', fecha: '2026-07-29', tipo: ['sesion', 'mentoria'] },
   { codigo: 'C-S03', nombre: 'Círculos — Sesión 3 (mentoría)', fecha: '2026-08-06', tipo: ['sesion', 'mentoria'] },
   { codigo: 'C-S04', nombre: 'Círculos — Sesión 4 (mentoría)', fecha: '2026-08-11', tipo: ['sesion', 'mentoria'] },
-  { codigo: 'C-S05', nombre: 'Círculos — Sesión 5 (mentoría)', fecha: '2026-08-18', tipo: ['sesion', 'mentoria'] },
+  // El 14/08 y el cierre del 21/08 salieron a la luz con la base maestra v2
+  // (2026-08-27): el programa tuvo seis encuentros después de la apertura, no
+  // cuatro. Los códigos NO se renumeran —C-S05 sigue siendo el 18/08, que es
+  // como quedó al crearse— porque el código es la clave del upsert y la que se
+  // guarda en session_attendance.actividad. Lo que sí va en orden cronológico es
+  // el NOMBRE, que es lo único que se muestra en pantalla (ver nombreActividad
+  // en src/lib/asistencia.js).
+  { codigo: 'C-S06', nombre: 'Círculos — Sesión 5 (mentoría)', fecha: '2026-08-14', tipo: ['sesion', 'mentoria'] },
+  { codigo: 'C-S05', nombre: 'Círculos — Sesión 6 (mentoría)', fecha: '2026-08-18', tipo: ['sesion', 'mentoria'] },
+  {
+    codigo: 'C-S07',
+    nombre: 'Círculos — Sesión de cierre',
+    descripcion: 'Encuentro de cierre del programa.',
+    fecha: '2026-08-21',
+    tipo: ['sesion', 'evento'],
+  },
 ];
 
 // Códigos de una numeración anterior (la apertura iba como 'C-AP', fuera de la
