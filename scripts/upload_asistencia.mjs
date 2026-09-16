@@ -27,6 +27,10 @@ const DETALLE = process.argv.includes('--detalle');
 const EXCEL_PATH = resolve(__dirname, '../bases_de_datos/Horizontes_Senior_Matriz_Maestra_VF.xlsx');
 const YEAR = 2026;
 const COHORT_SLUG = 'horizontes-senior-2026'; // cohorte destino: Horizontes Senior
+// Grupos cuyas hojas lee ESTE script. Una matrícula de la cohorte con otra ruta
+// actual (hoy, "Junior x Círculos") la administra otro ETL: aquí no se le
+// escribe ni se le cambia el estado.
+const GRUPOS_DE_ESTE_ETL = new Set(['Junior', 'Senior', 'Activación']);
 
 // Fechas oficiales de los cafés de conocimiento (presenciales, compartidos Junior+Senior+Activación),
 // tomadas del cronograma V9 (hoja "Matriz de horarios"). Keyed por número de café.
@@ -48,6 +52,21 @@ const RENOMBRE_COLUMNAS = {
   // como dos actividades distintas y la sesión queda contada dos veces.
   'Sesion 21/08': 'Sesion 20/08',
   'Observacion Sesion 21/08': 'Observacion Sesion 20/08',
+  // Mismo corrimiento un mes después: la sesión de Automatización (V-S10) fue
+  // el JUEVES 03/09 y la hoja Senior la encabeza "Sesion 04/09" (viernes).
+  // Contrastada persona por persona contra lo capturado en la app: 40 de 44
+  // iguales, y las 4 restantes son 2 asincrónicos y 2 correcciones del Excel.
+  // Confirmado por el usuario el 2026-09-16: las sesiones Senior son los jueves.
+  'Sesion 04/09': 'Sesion 03/09',
+  'Observacion Sesion 04/09': 'Observacion Sesion 03/09',
+  // La Mentoría 5 de Junior fue el MIÉRCOLES 02/09 —todas las mentorías Junior
+  // son miércoles y así está en el calendario, con la asistencia ya capturada
+  // desde la app (5 sí / 42 no, idéntica a la hoja)—. La hoja Junior la fecha
+  // "05/09" (sábado) y la de Activación no le pone día ("Mentoria 5 /09/26"):
+  // sin fecha, `grupoEnFecha` no puede ubicarla y las 20 celdas se descartaban.
+  // Ojo con el doble espacio del encabezado de Junior: es así en el archivo.
+  'Mentoria 5  05/09/26': 'Mentoria 5 02/09/26',
+  'Mentoria 5 /09/26': 'Mentoria 5 02/09/26',
 };
 
 const { url, key } = credencialesServicio();
@@ -79,13 +98,20 @@ function esFutura(fecha) {
   return String(fecha).slice(0, 10) > HOY_BOGOTA;
 }
 
+// "asincronico" cuenta como INASISTENCIA. Desde agosto la matriz escribe esa
+// palabra en las casillas de sesión y de café de quienes pasaron a modalidad
+// asincrónica (12 personas activas al 2026-09-16). Como no era un valor
+// reconocido caía en `null` ("no se le midió") y les subía el porcentaje. La
+// decisión del usuario (2026-09-16) es que a estas personas se les mide
+// distinto al final del programa, pero en la asistencia su asincronía es una
+// falta: el mismo criterio con el que la app ya los venía marcando "no".
 function parseAttendanceValue(v) {
   if (v === null || v === undefined || v === '') return null;
   const n = Number(v);
   if (!Number.isNaN(n)) return n > 0;
   const s = lc(v);
   if (['sí', 'si', 'asistió', 'asistio', 'entregó', 'entrego', 'x', 'true'].includes(s)) return true;
-  if (['no', 'no asistió', 'no asistio', 'no entregó', 'false'].includes(s)) return false;
+  if (['no', 'no asistió', 'no asistio', 'no entregó', 'false', 'asincronico', 'asincrónico'].includes(s)) return false;
   return null;
 }
 
@@ -542,10 +568,22 @@ async function main() {
   //   • inactivos    → FUERON elegidos (Seleccionado en la matriz), ahora inactivos. SÍ aparecen.
   //   • noElegidos   → NUNCA fueron elegidos ('No seleccionado' o fuera de la matriz).
   //                    Enrollments heredados/erróneos → elegido:false → NO aparecen en Formación.
-  const inactivos = [], noElegidos = [];
+  //   • otros grupos → los administra OTRO ETL y este no los toca (ver GRUPOS_DE_ESTE_ETL).
+  const inactivos = [], noElegidos = [], deOtroEtl = [];
   for (const e of (enrs || [])) {
     const doc = norm(e.custom_form_data?.cedula ?? e.candidates?.document_number);
     if (docsSeguimiento.has(doc)) continue; // en hoja → activo, ya procesado arriba
+    // "Junior x Círculos" vive en la hoja "Seguimiento Junior 2", que lee
+    // upload_junior_circulos.mjs, no este script. Como no están en las tres
+    // hojas de aquí, caían en la rama de abajo y el plan los marcaba inactivos
+    // con "ya no figura en las matrices de seguimiento" —los 15, en el dry run
+    // del 2026-09-16—. Se resuelve por la ruta actual y no por el documento:
+    // uno de los 15 tiene la cédula digitada distinta en esa hoja.
+    const rutaHoy = rutaActual(e.custom_form_data || {});
+    if (rutaHoy && !GRUPOS_DE_ESTE_ETL.has(rutaHoy)) {
+      deOtroEtl.push({ doc, name: e.custom_form_data?.nombre_completo || `${e.candidates?.first_name ?? ''} ${e.candidates?.last_name ?? ''}`.trim(), ruta: rutaHoy });
+      continue;
+    }
     const m = matriz.get(doc);
     const rutaPrevia = e.custom_form_data?.ruta_asignada || (m?.ruta_inicial && m.ruta_inicial !== 'No aplica' ? m.ruta_inicial : null) || null;
     // Activación apenas inicia hoy: quien sale de su hoja NO cuenta como inactivo del programa
@@ -587,6 +625,7 @@ async function main() {
   const inactivosEnHoja = plan.updateEnrollments.filter(x => x.status === 'inactive');
   console.log(`       de ellos, marcados INACTIVO en la hoja: ${inactivosEnHoja.length} (NO se reactivan)`);
   console.log(`  Enrollments a CREAR (Activación nuevos): ${plan.insertEnrollments.length}  ${byGrupo(plan.insertEnrollments)}`);
+  console.log(`  De otro ETL (no se tocan):                ${deOtroEtl.length}  ${JSON.stringify(deOtroEtl.reduce((g, x) => (g[x.ruta] = (g[x.ruta] || 0) + 1, g), {}))}`);
   console.log(`  INACTIVOS que SÍ fueron elegidos (aparecen): ${inactivos.length}`);
   inactivos.forEach(x => console.log(`       • ${x.doc} ${x.name} (era ${x.grupoPrevio})`));
   console.log(`  ❌ NUNCA elegidos (elegido:false, NO aparecen): ${noElegidos.length}`);

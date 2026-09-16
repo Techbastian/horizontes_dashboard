@@ -394,9 +394,16 @@ export default function FormationPage({ enrollments = [], formationProgress, att
   // Sesiones cuya fecha ya pasó pero que siguen sin asistencia cargada. Quedan en
   // gris (no hunden los porcentajes), pero sin aviso se olvidarían en silencio.
   // Lo calcula src/lib/asistencia.js; aquí solo se acota al grupo visible.
+  // Solo los grupos con pestaña: una fase histórica sin nadie (Activación) sigue
+  // recibiendo los cafés compartidos del calendario, pero sus registros viven en
+  // el grupo al que pasó la gente, y el informe los listaba como "sin cargar".
+  const sinCargarVisibles = useMemo(
+    () => (datos.asistenciaSinCargar || []).filter(s => GROUPS.includes(s.grupo)),
+    [datos.asistenciaSinCargar, GROUPS]
+  );
   const sinCargar = useMemo(
-    () => (datos.asistenciaSinCargar || []).filter(s => s.grupo === activeTab),
-    [datos.asistenciaSinCargar, activeTab]
+    () => sinCargarVisibles.filter(s => s.grupo === activeTab),
+    [sinCargarVisibles, activeTab]
   );
 
   const meta = GROUP_META[activeTab];
@@ -736,7 +743,7 @@ export default function FormationPage({ enrollments = [], formationProgress, att
             groupAttendance={datos.groupAttendance}
             perfiles={profiles}
             asistencia={datos.attendanceByCandidate}
-            sinCargar={datos.asistenciaSinCargar}
+            sinCargar={sinCargarVisibles}
             columnasExtra={cfg.columnasExtra}
             etiquetaGrupo={(g) => GROUP_META[g]?.label || g}
           />
