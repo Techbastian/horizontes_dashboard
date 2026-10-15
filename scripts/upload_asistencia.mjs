@@ -67,6 +67,15 @@ const RENOMBRE_COLUMNAS = {
   // Ojo con el doble espacio del encabezado de Junior: es así en el archivo.
   'Mentoria 5  05/09/26': 'Mentoria 5 02/09/26',
   'Mentoria 5 /09/26': 'Mentoria 5 02/09/26',
+  // Matriz del 2026-10-15. La sesión de Storytelling (V-S12) fue el JUEVES 01/10
+  // y la hoja Senior la encabeza "Sesion 02/10" (viernes); su columna de
+  // observaciones sí dice 01/10. Contra la app: 28 sí / 16 no en los dos lados.
+  'Sesion 02/10': 'Sesion 01/10',
+  // La hoja de Activación (hoy Junior) cambió las fechas de las mentorías 5 y 6
+  // a "26/09" (sábado) y "16/09"; en el calendario son los miércoles 02/09 y
+  // 09/09, como en la hoja Junior. Sin esto se descartaban sus 40 celdas.
+  'Mentoria 5 26/09/26': 'Mentoria 5 02/09/26',
+  'Mentoria 6  16/09/26': 'Mentoria 6  09/09/26',
 };
 
 const { url, key } = credencialesServicio();
